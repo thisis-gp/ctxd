@@ -1,0 +1,69 @@
+# Hosted ctxd with Caddy HTTPS reverse proxy (recommended).
+#
+# Ops note (the "ops gap"):
+#   Nightly ingest must run ON THIS HOST (same volume as the MCP server).
+#   GitHub Actions can build artifacts, but it does not update your live Docker volume.
+#   Use host cron:  docker compose run --rm refresh
+#
+# Setup:
+#   1. cp .env.example .env  — set METABASE_*, CTXD_ADMIN_TOKEN, CTXD_DOMAIN, ACME_EMAIL
+#   2. docker compose up -d --build
+#   3. docker compose run --rm refresh
+#   4. Open https://$CTXD_DOMAIN/admin — issue per-user tokens
+#   5. Users add https://$CTXD_DOMAIN/mcp + their personal Bearer token in Claude/Codex
+
+services:
+  ctxd:
+    build: .
+    expose:
+      - "8787"
+    env_file: .env
+    environment:
+      CTXD_HTTP_HOST: "0.0.0.0"
+      CTXD_HTTP_PORT: "8787"
+      SNAPSHOT_DIR: /data/snapshots
+      CTXD_DATA_DIR: /data
+    volumes:
+      - ctxd-data:/data
+      - ./semantics:/app/semantics:ro
+      - ./context.contract.json:/app/context.contract.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CTXD_DOMAIN: ${CTXD_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ctxd
+    restart: unless-stopped
+
+  refresh:
+    build: .
+    profiles: ["refresh"]
+    env_file: .env
+    environment:
+      SNAPSHOT_DIR: /data/snapshots
+      CTXD_DATA_DIR: /data
+    volumes:
+      - ctxd-data:/data
+      - ./semantics:/app/semantics:ro
+    entrypoint: ["node", "dist/cli.js", "refresh", "--prune-keep", "14"]
+
+volumes:
+  ctxd-data:
+  caddy-data:
+  caddy-config:

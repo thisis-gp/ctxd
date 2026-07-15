@@ -1,0 +1,19 @@
+{
+  "nodes": {
+    "model.demo.orders": {
+      "resource_type": "model",
+      "database": "warehouse",
+      "schema": "public",
+      "alias": "orders",
+      "name": "orders",
+      "description": "Customer order fact table.",
+      "columns": {
+        "id": { "data_type": "integer", "description": "Order id." },
+        "customer_id": { "data_type": "integer", "description": "Customer id." },
+        "status": { "data_type": "text", "description": "Order status." },
+        "created_at": { "data_type": "timestamp", "description": "Order creation time." }
+      }
+    }
+  },
+  "sources": {}
+}

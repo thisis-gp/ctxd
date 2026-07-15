@@ -1,0 +1,41 @@
+name: nightly-refresh
+
+# Optional: refresh a hosted ctxd snapshot every night from Metabase.
+# Requires repo secrets: METABASE_URL, METABASE_API_KEY (and optional DENYLIST, etc.).
+# Skip if you run refresh via cron on the host instead.
+
+on:
+  schedule:
+    - cron: "15 2 * * *"   # 02:15 UTC
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+
+      - name: Refresh snapshot from Metabase
+        env:
+          METABASE_URL: ${{ secrets.METABASE_URL }}
+          METABASE_API_KEY: ${{ secrets.METABASE_API_KEY }}
+          METABASE_DATABASE_IDS: ${{ secrets.METABASE_DATABASE_IDS }}
+          DENYLIST: ${{ secrets.DENYLIST }}
+          SNAPSHOT_DIR: ./snapshots
+          METABASE_INSTANCE: production
+        run: node dist/cli.js refresh --prune-keep 14
+
+      - name: Upload current snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctxd-snapshot-nightly
+          path: snapshots/
+          retention-days: 14

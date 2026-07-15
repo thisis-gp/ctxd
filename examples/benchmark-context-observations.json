@@ -1,0 +1,25 @@
+[
+  {
+    "id": "orders-by-customer",
+    "agent": "ctxd",
+    "measures": ["orders.count"],
+    "dimensions": ["customers.name"],
+    "entities": ["orders", "customers"],
+    "calls": 2,
+    "latencyMs": 3100,
+    "inputTokens": 4200,
+    "outputTokens": 900,
+    "answerCorrect": true
+  },
+  {
+    "id": "ambiguous-metric",
+    "agent": "ctxd",
+    "measures": ["users.count"],
+    "entities": ["users"],
+    "calls": 2,
+    "latencyMs": 2700,
+    "inputTokens": 3900,
+    "outputTokens": 800,
+    "answerCorrect": true
+  }
+]

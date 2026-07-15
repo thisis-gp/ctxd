@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ctxd demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7f8;
+        --panel: #ffffff;
+        --ink: #162027;
+        --muted: #5a6872;
+        --line: #d8e0e6;
+        --accent: #0f766e;
+        --accent-2: #a16207;
+        --accent-3: #315b91;
+        --code: #101820;
+        --code-text: #edf6ff;
+        --ok: #0f766e;
+        --warn: #a16207;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        min-height: 100vh;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid rgba(216, 224, 230, 0.9);
+        background: rgba(245, 247, 248, 0.92);
+        backdrop-filter: blur(10px);
+      }
+
+      .topbar-inner,
+      .section {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .topbar-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 58px;
+        gap: 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 740;
+      }
+
+      .mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        background:
+          linear-gradient(135deg, rgba(15, 118, 110, 0.92), rgba(49, 91, 145, 0.92)),
+          #0f766e;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .nav a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .hero {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+        gap: 34px;
+        align-items: center;
+        padding: 44px 0 30px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 780px;
+        font-size: clamp(36px, 6vw, 68px);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        max-width: 700px;
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.58;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 14px;
+        color: var(--ink);
+        background: var(--panel);
+        text-decoration: none;
+        font-weight: 650;
+        font-size: 14px;
+      }
+
+      .button.primary {
+        border-color: #0f766e;
+        color: #ffffff;
+        background: #0f766e;
+      }
+
+      .terminal {
+        border: 1px solid #263542;
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--code);
+        box-shadow: 0 24px 56px rgba(20, 31, 40, 0.14);
+      }
+
+      .terminal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 38px;
+        padding: 0 12px;
+        border-bottom: 1px solid #263542;
+        color: #9fb0bf;
+        font-size: 13px;
+      }
+
+      .dots {
+        display: flex;
+        gap: 6px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #657381;
+      }
+
+      pre {
+        margin: 0;
+        padding: 17px;
+        overflow: auto;
+        color: var(--code-text);
+        font: 13px/1.55 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        white-space: pre;
+      }
+
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      .section {
+        padding: 30px 0;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 16px;
+      }
+
+      h2 {
+        font-size: 25px;
+        letter-spacing: 0;
+      }
+
+      .section-note {
+        max-width: 560px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .status-grid,
+      .adapter-grid,
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .adapter-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .metric-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 720;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .value {
+        margin-top: 8px;
+        font-size: 25px;
+        font-weight: 780;
+        letter-spacing: 0;
+      }
+
+      .small {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .pipeline {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .stage {
+        min-height: 132px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 15px;
+        position: relative;
+      }
+
+      .stage::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -10px;
+        width: 10px;
+        height: 1px;
+        background: var(--line);
+      }
+
+      .stage:last-child::after {
+        display: none;
+      }
+
+      .stage-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: #e7f2f0;
+        color: var(--accent);
+        font-weight: 800;
+        font-size: 13px;
+      }
+
+      .stage h3,
+      .card h3 {
+        margin-top: 12px;
+        font-size: 16px;
+        letter-spacing: 0;
+      }
+
+      .stage p,
+      .card p {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.5;
+        font-size: 14px;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border: 1px solid #cfe1dc;
+        border-radius: 999px;
+        padding: 0 10px;
+        color: #0f5f59;
+        background: #eef8f6;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .badge.warn {
+        border-color: #ead9b7;
+        color: #855706;
+        background: #fff8ea;
+      }
+
+      .mini-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+
+      .mini-table th,
+      .mini-table td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 0;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .mini-table th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .foot {
+        border-top: 1px solid var(--line);
+        margin-top: 28px;
+        padding: 22px 0 34px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      @media (max-width: 920px) {
+        .hero,
+        .split {
+          grid-template-columns: 1fr;
+        }
+
+        .status-grid,
+        .adapter-grid,
+        .metric-grid,
+        .pipeline {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .stage::after {
+          display: none;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .topbar-inner,
+        .section,
+        .hero {
+          width: min(100% - 28px, 1180px);
+        }
+
+        .nav {
+          display: none;
+        }
+
+        h1 {
+          font-size: 38px;
+        }
+
+        .subtitle {
+          font-size: 16px;
+        }
+
+        .status-grid,
+        .adapter-grid,
+        .metric-grid,
+        .pipeline {
+          grid-template-columns: 1fr;
+        }
+
+        .section-header {
+          align-items: start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="brand">
+            <span class="mark" aria-hidden="true"></span>
+            <span>ctxd</span>
+          </div>
+          <nav class="nav" aria-label="Page sections">
+            <a href="#status">Status</a>
+            <a href="#pipeline">Pipeline</a>
+            <a href="#benchmarks">Benchmarks</a>
+            <a href="#adapters">Adapters</a>
+          </nav>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <h1>Release-aware context for data agents.</h1>
+          <p class="subtitle">
+            Give Claude, Codex, and other agents compact metadata, reviewed metrics,
+            approved joins, read-only SQL validation, and release gates without
+            dumping the full warehouse schema into every conversation.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#quickstart">Run locally</a>
+            <a class="button" href="#benchmarks">View benchmark</a>
+          </div>
+        </div>
+
+        <div class="terminal" aria-label="Release gate example">
+          <div class="terminal-head">
+            <span>release gate</span>
+            <span class="dots" aria-hidden="true">
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+            </span>
+          </div>
+          <pre>node dist/cli.js release-gate \
+  --release staging-fresh \
+  --benchmark examples/benchmark.json \
+  --observations examples/benchmark-observations.json
+
+{
+  "ok": true,
+  "tables": 136,
+  "columns": 3974,
+  "relationships": 236
+}</pre>
+        </div>
+      </section>
+
+      <section class="section" id="status">
+        <div class="section-header">
+          <div>
+            <h2>Current Snapshot</h2>
+            <p class="section-note">The local demo is pointed at the latest verified staging snapshot.</p>
+          </div>
+        </div>
+        <div class="status-grid">
+          <div class="card">
+            <div class="label">Release</div>
+            <div class="value">staging-fresh</div>
+            <p class="small">Promoted as the active context snapshot.</p>
+          </div>
+          <div class="card">
+            <div class="label">Tables</div>
+            <div class="value">136</div>
+            <p class="small">Indexed as compact searchable entities.</p>
+          </div>
+          <div class="card">
+            <div class="label">Columns</div>
+            <div class="value">3,974</div>
+            <p class="small">Available through targeted retrieval.</p>
+          </div>
+          <div class="card">
+            <div class="label">Relationships</div>
+            <div class="value">236</div>
+            <p class="small">Used for join-path discovery and planning.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="pipeline">
+        <div class="section-header">
+          <div>
+            <h2>Agent Query Pipeline</h2>
+            <p class="section-note">Agents use the context layer as a narrow contract instead of scanning information_schema repeatedly.</p>
+          </div>
+        </div>
+        <div class="pipeline">
+          <div class="stage">
+            <span class="stage-num">1</span>
+            <h3>Snapshot</h3>
+            <p>Build immutable metadata from Metabase or adapter imports.</p>
+          </div>
+          <div class="stage">
+            <span class="stage-num">2</span>
+            <h3>Contract</h3>
+            <p>Review entities, dimensions, measures, and approved join paths.</p>
+          </div>
+          <div class="stage">
+            <span class="stage-num">3</span>
+            <h3>Plan</h3>
+            <p>Return only relevant tables, columns, saved questions, and ambiguity warnings.</p>
+          </div>
+          <div class="stage">
+            <span class="stage-num">4</span>
+            <h3>Compile</h3>
+            <p>Generate SQL from semantic or contract queries using reviewed definitions.</p>
+          </div>
+          <div class="stage">
+            <span class="stage-num">5</span>
+            <h3>Gate</h3>
+            <p>Validate read-only SQL, schema references, release freshness, and benchmarks.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="quickstart">
+        <div class="section-header">
+          <div>
+            <h2>Commands</h2>
+            <p class="section-note">The demo commands are credential-free unless they execute live Metabase queries.</p>
+          </div>
+        </div>
+        <div class="split">
+          <div class="terminal">
+            <div class="terminal-head">
+              <span>draft a contract from dbt</span>
+            </div>
+            <pre>node dist/cli.js adapters inspect dbt \
+  examples/dbt-manifest-mini.json
+
+node dist/cli.js contract draft \
+  --adapter dbt \
+  --input examples/dbt-manifest-mini.json \
+  --project demo</pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal-head">
+              <span>compare agent runs</span>
+            </div>
+            <pre>node dist/cli.js benchmark compare \
+  examples/benchmark.json \
+  examples/benchmark-direct-observations.json \
+  examples/benchmark-context-observations.json
+
+# token reduction: 84.44%
+# latency reduction: 70.56%
+# call reduction: 66.67%</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="benchmarks">
+        <div class="section-header">
+          <div>
+            <h2>Benchmark Result</h2>
+            <p class="section-note">A model-neutral harness compares direct schema exploration against context-layer querying.</p>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="card">
+            <div class="label">Tokens</div>
+            <div class="value">84.44%</div>
+            <p class="small">Reduction in the sample direct-vs-context run.</p>
+          </div>
+          <div class="card">
+            <div class="label">Latency</div>
+            <div class="value">70.56%</div>
+            <p class="small">Lower elapsed time across benchmark cases.</p>
+          </div>
+          <div class="card">
+            <div class="label">Tool Calls</div>
+            <div class="value">66.67%</div>
+            <p class="small">Fewer context discovery round trips.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="adapters">
+        <div class="section-header">
+          <div>
+            <h2>Adapter Surface</h2>
+            <p class="section-note">External metadata sources normalize into the same contract shape used by snapshots.</p>
+          </div>
+        </div>
+        <div class="adapter-grid">
+          <div class="card">
+            <div class="label">Implemented</div>
+            <h3>dbt</h3>
+            <p>Imports manifest models, sources, descriptions, and columns.</p>
+            <div class="badge-row">
+              <span class="badge">tested fixture</span>
+              <span class="badge">contract draft</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="label">Implemented</div>
+            <h3>Cube</h3>
+            <p>Imports cubes, dimensions, and measures from JSON schema exports.</p>
+            <div class="badge-row">
+              <span class="badge warn">needs real export fixture</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="label">Implemented</div>
+            <h3>MetricFlow</h3>
+            <p>Imports semantic models, dimensions, measures, and node relations.</p>
+            <div class="badge-row">
+              <span class="badge warn">needs real export fixture</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 14px;">
+          <div class="label">Release Checks</div>
+          <table class="mini-table">
+            <thead>
+              <tr>
+                <th>Gate</th>
+                <th>What It Blocks</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Snapshot validation</td>
+                <td>Missing index, empty schema, invalid semantics, unexpected shrink</td>
+                <td>Passing</td>
+              </tr>
+              <tr>
+                <td>Contract validation</td>
+                <td>Missing entities, unsafe joins, broken physical references</td>
+                <td>Available</td>
+              </tr>
+              <tr>
+                <td>Benchmark validation</td>
+                <td>Wrong metric, wrong dimension, extra table, too many calls, slow runs</td>
+                <td>Passing</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="section foot">
+        Static demo for the local development build. Live query execution still requires
+        Metabase credentials in environment variables; snapshots and benchmark fixtures
+        can be inspected offline.
+      </footer>
+    </main>
+  </body>
+</html>

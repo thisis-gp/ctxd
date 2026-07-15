@@ -1,0 +1,18 @@
+# Caddy terminates HTTPS and proxies to ctxd (best simple choice: auto HTTPS via Let's Encrypt).
+#
+# Production:
+#   CTXD_DOMAIN=ctxd.yourcompany.com
+#   ACME_EMAIL=ops@yourcompany.com
+#
+# Local smoke test:
+#   CTXD_DOMAIN=localhost
+#   (Caddy may use an internal cert for localhost — accept the browser warning)
+
+{
+	email {$ACME_EMAIL:}
+}
+
+{$CTXD_DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy ctxd:8787
+}

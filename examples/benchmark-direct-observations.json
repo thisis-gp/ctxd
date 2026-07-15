@@ -1,0 +1,25 @@
+[
+  {
+    "id": "orders-by-customer",
+    "agent": "direct-schema",
+    "measures": ["orders.count"],
+    "dimensions": ["customers.name"],
+    "entities": ["orders", "customers"],
+    "calls": 7,
+    "latencyMs": 11500,
+    "inputTokens": 36000,
+    "outputTokens": 1800,
+    "answerCorrect": true
+  },
+  {
+    "id": "ambiguous-metric",
+    "agent": "direct-schema",
+    "measures": ["users.count"],
+    "entities": ["users"],
+    "calls": 5,
+    "latencyMs": 8200,
+    "inputTokens": 24000,
+    "outputTokens": 1200,
+    "answerCorrect": true
+  }
+]

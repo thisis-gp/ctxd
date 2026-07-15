@@ -1,0 +1,18 @@
+{
+  "_comment": "Each user gets their own token from https://HOST/admin (admin uses CTXD_ADMIN_TOKEN). No shared org token.",
+  "mcpServers": {
+    "ctxd-local": {
+      "command": "node",
+      "args": ["/absolute/path/to/ctxd/dist/cli.js", "serve"],
+      "env": {
+        "SNAPSHOT_DIR": "/absolute/path/to/ctxd/snapshots"
+      }
+    },
+    "ctxd": {
+      "url": "https://ctxd.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ctxd_USER_TOKEN_FROM_ADMIN"
+      }
+    }
+  }
+}

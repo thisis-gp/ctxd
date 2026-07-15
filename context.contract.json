@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "project": "example-orders",
+  "description": "Small vendor-neutral contract used by tests and documentation.",
+  "entities": [
+    { "id": "orders", "table": "public.orders", "grain": "one row per order", "synonyms": ["order"] },
+    { "id": "customers", "table": "public.customers", "grain": "one row per customer", "synonyms": ["customer", "buyer"] }
+  ],
+  "dimensions": [
+    { "id": "orders.status", "entity": "orders", "expression": "status", "synonyms": ["state"] },
+    { "id": "customers.name", "entity": "customers", "expression": "name", "synonyms": ["customer name"] }
+  ],
+  "measures": [
+    { "id": "orders.count", "entity": "orders", "expression": "COUNT(*)", "synonyms": ["number of orders"] }
+  ],
+  "joins": [
+    { "id": "orders.customer_id__customers.id", "from": "orders", "to": "customers", "fromColumn": "customer_id", "toColumn": "id", "relationship": "many_to_one", "approved": true, "fanoutRisk": "none" }
+  ],
+  "policies": { "maxRows": 1000 }
+}

@@ -1,0 +1,74 @@
+{
+  "name": "ctxd",
+  "version": "0.1.0",
+  "description": "Vendor-neutral context contract, semantic compiler, release validation, and MCP runtime for reliable data agents.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "mcp",
+    "metabase",
+    "agents",
+    "context",
+    "semantic-layer",
+    "sql",
+    "snapshot"
+  ],
+  "bin": {
+    "ctxd": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./cli": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "semantics",
+    "deploy",
+    "context.contract.json",
+    ".env.example",
+    "Dockerfile",
+    "docker-compose.yml",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "serve": "node dist/cli.js serve",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build",
+    "pretest": "npm run build",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:integration": "node scripts/itest.mjs",
+    "benchmark:compare": "node dist/cli.js benchmark compare examples/benchmark.json examples/benchmark-direct-observations.json examples/benchmark-context-observations.json",
+    "release:gate": "node dist/cli.js release-gate",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.1",
+    "better-sqlite3": "^11.3.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "node-sql-parser": "^5.3.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.0",
+    "gpt-tokenizer": "^3.4.0",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}

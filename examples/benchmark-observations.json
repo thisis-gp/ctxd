@@ -1,0 +1,19 @@
+[
+  {
+    "id": "orders-by-customer",
+    "measures": ["orders.count"],
+    "dimensions": ["customers.name"],
+    "entities": ["orders", "customers"],
+    "calls": 2,
+    "latencyMs": 800,
+    "answerCorrect": true
+  },
+  {
+    "id": "ambiguous-metric",
+    "measures": ["users.count"],
+    "entities": ["users"],
+    "calls": 1,
+    "latencyMs": 400,
+    "answerCorrect": true
+  }
+]

@@ -1,0 +1,27 @@
+[
+  {
+    "id": "claims.count",
+    "name": "claim count",
+    "synonyms": ["claims", "number of claims", "how many claims", "total claims"],
+    "description": "Count of rows in the canonical claims table.",
+    "table": "public.claims",
+    "columns": [],
+    "definition": "COUNT(*) over public.claims.",
+    "sqlTemplate": "SELECT COUNT(*) AS claim_count FROM public.claims;",
+    "measureExpression": "COUNT(*)",
+    "databaseName": "app"
+  },
+  {
+    "id": "claims.csat_responses",
+    "name": "CSAT responses",
+    "synonyms": ["CSAT", "customer satisfaction", "customer satisfaction responses", "survey responses"],
+    "description": "Claims with a non-empty CSAT rating or feedback response.",
+    "table": "public.claims",
+    "columns": ["public.claims.csat"],
+    "definition": "A response is populated when csat.rating or csat.feedback is non-empty.",
+    "sqlTemplate": "SELECT COUNT(*) AS csat_response_count FROM public.claims WHERE csat IS NOT NULL AND csat <> '{}'::jsonb AND ((csat->>'rating') IS NOT NULL AND btrim(csat->>'rating') <> '' OR (csat->>'feedback') IS NOT NULL AND btrim(csat->>'feedback') <> '');",
+    "measureExpression": "COUNT(*)",
+    "defaultFilter": "csat IS NOT NULL AND csat <> '{}'::jsonb AND ((csat->>'rating') IS NOT NULL AND btrim(csat->>'rating') <> '' OR (csat->>'feedback') IS NOT NULL AND btrim(csat->>'feedback') <> '')",
+    "databaseName": "app"
+  }
+]

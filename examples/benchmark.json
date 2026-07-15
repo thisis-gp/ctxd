@@ -1,0 +1,17 @@
+[
+  {
+    "id": "orders-by-customer",
+    "question": "How many orders did each customer place?",
+    "expectedMeasures": ["orders.count"],
+    "expectedDimensions": ["customers.name"],
+    "requiredEntities": ["orders", "customers"],
+    "forbiddenEntities": ["unknown_table"],
+    "maxCalls": 4
+  },
+  {
+    "id": "ambiguous-metric",
+    "question": "How many active users are there?",
+    "expectedMeasures": ["users.count"],
+    "requiredEntities": ["users"]
+  }
+]
