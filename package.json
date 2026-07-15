@@ -57,7 +57,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prepack": "npm run build",
     "pretest": "npm run build",
-    "test": "node --test \"test/*.test.mjs\"",
+    "test": "node --test",
     "test:integration": "node scripts/itest.mjs",
     "benchmark:compare": "node dist/cli.js benchmark compare examples/benchmark.json examples/benchmark-direct-observations.json examples/benchmark-context-observations.json",
     "release:gate": "node dist/cli.js release-gate",
