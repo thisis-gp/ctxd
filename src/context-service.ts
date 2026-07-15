@@ -37,6 +37,14 @@ import {
   type SqlValidationResult,
 } from "./sql/validate.js";
 import { compileContractQuery, parseContextContract, type ContextContract, type ContractQuery } from "./contract.js";
+import { rankHybridCandidates, type RankableColumn, type RankableTable, type RankedCandidate } from "./ranker.js";
+import {
+  buildSuggestedSemanticQuery,
+  classifyQueryIntent,
+  scorePlanConfidence,
+  type PlanConfidence,
+  type QueryIntent,
+} from "./intent.js";
 
 /** Provenance stamped onto every context response. */
 export interface SourceRef {
@@ -101,7 +109,14 @@ export interface SearchResponse {
 
 export interface QueryPlanResponse {
   question: string;
+  intent: QueryIntent;
+  intentReasons: string[];
+  confidence: PlanConfidence;
+  confidenceReasons: string[];
   semanticMatches: SemanticMatch[];
+  suggestedSemanticQuery?: SemanticQuery;
+  rankedTables: RankedCandidate<RankableTable>[];
+  rankedColumns: RankedCandidate<RankableColumn>[];
   recommendedTables: string[];
   recommendedColumns: string[];
   /** Shortest FK join paths connecting the recommended tables (from the primary table). */
@@ -161,6 +176,8 @@ export class ContextService {
   private manifest?: SnapshotManifest;
   private source?: SourceRef;
   private semanticDefinitions: SemanticDefinition[] = [];
+  private relationships: Relationship[] = [];
+  private joinGraph?: Map<string, { to: string; edge: Relationship }[]>;
   /** Set when pinned to an explicit release (no auto-reload). */
   private pinnedRelease?: string;
   /** Raw current.json contents last loaded, used to detect promotions. */
@@ -219,6 +236,8 @@ export class ContextService {
     this.manifest = loaded.manifest;
     this.source = loaded.source;
     this.semanticDefinitions = loaded.semantics;
+    this.relationships = loaded.reader.getAllRelationships();
+    this.joinGraph = this.buildJoinGraphFromRelationships(this.relationships);
   }
 
   /**
@@ -372,28 +391,73 @@ export class ContextService {
    */
   planQuery(question: string, limit = 8): QueryPlanResponse {
     const reader = this.requireReader();
-    const candidates = this.search(question, { scope: "all", limit });
+    const candidateLimit = Math.max(limit * 3, 12);
+    const candidates = this.search(question, { scope: "all", limit: candidateLimit });
     const semanticMatches = rankSemanticDefinitions(question, this.semanticDefinitions, limit);
-    const tableNames = candidates.tables.map((table) => table.qualifiedName);
-    const columnNames = candidates.columns.map((column) => column.qualifiedName);
+    const intent = classifyQueryIntent(question, semanticMatches);
+    const topScore = semanticMatches[0]?.score ?? 0;
+    const metricIntent = intent.intent === "metric_only" || intent.intent === "metric_by_dimension";
+    const rankingSemanticMatches = metricIntent || intent.intent === "definition"
+      ? semanticMatches
+      : semanticMatches.filter((match) => match.score >= 2);
+    const semanticTables = rankingSemanticMatches
+      .map((match) => reader.getEntity(match.definition.table))
+      .filter((entity): entity is Entity => entity !== undefined && entity.kind === "table")
+      .map((entity) => ({
+        name: entity.name,
+        qualifiedName: entity.qualifiedName,
+        ...(entity.description ? { description: entity.description } : {}),
+        ...(entity.columnCount != null ? { columnCount: entity.columnCount } : {}),
+        ...(entity.denylisted ? { denylisted: true } : {}),
+      }));
+    const semanticColumns = rankingSemanticMatches
+      .flatMap((match) => match.definition.columns)
+      .map((column) => reader.getEntity(column))
+      .filter((entity): entity is Entity => entity !== undefined && entity.kind === "column")
+      .map((entity) => ({
+        name: entity.name,
+        qualifiedName: entity.qualifiedName,
+        ...(entity.table ? { table: entity.table } : {}),
+        ...(entity.dataType ? { type: entity.dataType } : {}),
+        ...(entity.semanticType ? { semanticType: entity.semanticType } : {}),
+      }));
+    const ranked = rankHybridCandidates({
+      question,
+      intent: intent.intent,
+      tables: uniqueByQualifiedName([...semanticTables, ...candidates.tables]),
+      columns: uniqueByQualifiedName([...semanticColumns, ...candidates.columns]),
+      semanticMatches: rankingSemanticMatches,
+      relationships: this.relationships,
+    });
+    const rankedTables = ranked.tables.slice(0, limit);
+    const rankedColumns = ranked.columns.slice(0, limit);
+    const tableNames = rankedTables.map((rankedTable) => rankedTable.item.qualifiedName);
+    const columnNames = rankedColumns.map((rankedColumn) => rankedColumn.item.qualifiedName);
     const savedQuestions = candidates.assets.filter(
       (asset) => asset.kind === "question" || asset.kind === "model",
-    );
-    const topScore = semanticMatches[0]?.score ?? 0;
+    ).slice(0, limit);
     const tiedTop = semanticMatches.filter((match) => match.score === topScore && topScore > 0);
-    const groupedQuestion = /\b(by|per|group(?:ed)?\s+by)\b/i.test(question);
+    const groupedQuestion = intent.intent === "metric_by_dimension";
     const closeSemanticCandidates = semanticMatches.length > 1
       ? topScore - (semanticMatches[1]?.score ?? 0) <= 2
       : topScore <= 2;
+    const hasUsefulSemanticMatch = topScore >= 2;
     const lowConfidenceSemanticMatch = groupedQuestion && semanticMatches.length > 0 && closeSemanticCandidates && tableNames.length > 1 && savedQuestions.length === 0;
     const requiresClarification = tiedTop.length > 1 || lowConfidenceSemanticMatch || (semanticMatches.length === 0 && savedQuestions.length === 0 && tableNames.length > 1);
-    // Union semantic-definition tables with the top search-hit tables. Using only
-    // semantic tables would drop tables the question needs for a join (e.g. a csat
-    // metric resolves to `claims`, but "by org" also needs `orgs`).
+    const semanticTablesToRecommend = hasUsefulSemanticMatch && metricIntent
+      ? semanticMatches.map((match) => match.definition.table)
+      : [];
+    const searchTablesToAdd = hasUsefulSemanticMatch && intent.intent === "metric_only"
+      ? []
+      : tableNames.slice(0, intent.intent === "metric_by_dimension" || intent.intent === "join_exploration" ? 3 : 2);
+    // Prefer semantic-definition tables once the metric is identified. Search-hit
+    // tables are added only when the question asks for grouping/dimensions or when
+    // no useful semantic metric matched; otherwise unrelated "response"-like
+    // tables leak into the join plan and small models over-join.
     const recommendedTables = [
       ...new Set([
-        ...semanticMatches.map((match) => match.definition.table),
-        ...tableNames.slice(0, 3),
+        ...semanticTablesToRecommend,
+        ...searchTablesToAdd,
       ]),
     ].slice(0, 4);
 
@@ -403,7 +467,7 @@ export class ContextService {
     const joinPaths: QueryPlanResponse["joinPaths"] = [];
     let suggestedFrom: string | undefined;
     if (recommendedTables.length > 1) {
-      const graph = this.buildJoinGraph(reader);
+      const graph = this.joinGraph ?? this.buildJoinGraphFromRelationships(this.relationships);
       const primary = recommendedTables[0]!.toLowerCase();
       for (const other of recommendedTables.slice(1)) {
         const p = this.shortestJoinPath(graph, primary, other.toLowerCase());
@@ -427,10 +491,26 @@ export class ContextService {
         ...nameColumns,
       ]),
     ];
+    const suggestedSemanticQuery = buildSuggestedSemanticQuery(question, intent.intent, semanticMatches);
+    const confidence = scorePlanConfidence({
+      intent: intent.intent,
+      semanticMatches,
+      rankedTables,
+      savedQuestionCount: savedQuestions.length,
+      requiresClarification,
+      hasSuggestedSemanticQuery: Boolean(suggestedSemanticQuery),
+    });
 
     return {
       question,
+      intent: intent.intent,
+      intentReasons: intent.reasons,
+      confidence: confidence.confidence,
+      confidenceReasons: confidence.reasons,
       semanticMatches,
+      ...(suggestedSemanticQuery ? { suggestedSemanticQuery } : {}),
+      rankedTables,
+      rankedColumns,
       recommendedTables,
       recommendedColumns,
       joinPaths,
@@ -649,7 +729,7 @@ export class ContextService {
     if (!b) throw new NotFoundError(`No entity found matching "${tableB}".`);
     const start = (a.kind === "table" ? a.qualifiedName : a.table ?? a.qualifiedName).toLowerCase();
     const goal = (b.kind === "table" ? b.qualifiedName : b.table ?? b.qualifiedName).toLowerCase();
-    const path = this.shortestJoinPath(this.buildJoinGraph(reader), start, goal);
+    const path = this.shortestJoinPath(this.joinGraph ?? this.buildJoinGraphFromRelationships(this.relationships), start, goal);
     if (path === null) return { path: null, source: this.src() };
     return { path, hops: path.length, source: this.src() };
   }
@@ -667,9 +747,12 @@ export class ContextService {
       const existing = alias.get(table);
       if (existing) return existing;
       const base = (table.split(".").pop() ?? table).replace(/[^a-z0-9]/gi, "").slice(0, 3).toLowerCase() || "t";
-      let a = base;
+      let a = RESERVED_SQL_ALIASES.has(base) ? `${base}_t` : base;
       let i = 1;
-      while (used.has(a)) a = `${base}${++i}`;
+      while (used.has(a)) {
+        const candidate = `${base}${++i}`;
+        a = RESERVED_SQL_ALIASES.has(candidate) ? `${candidate}_t` : candidate;
+      }
       used.add(a);
       alias.set(table, a);
       return a;
@@ -692,13 +775,13 @@ export class ContextService {
   }
 
   /** Build an undirected FK adjacency map (lower-cased table names). Load once, reuse. */
-  private buildJoinGraph(reader: SnapshotReader): Map<string, { to: string; edge: Relationship }[]> {
+  private buildJoinGraphFromRelationships(relationships: Relationship[]): Map<string, { to: string; edge: Relationship }[]> {
     const adj = new Map<string, { to: string; edge: Relationship }[]>();
     const link = (from: string, to: string, edge: Relationship) => {
       const l = from.toLowerCase();
       (adj.get(l) ?? adj.set(l, []).get(l)!).push({ to: to.toLowerCase(), edge });
     };
-    for (const e of reader.getAllRelationships()) {
+    for (const e of relationships) {
       link(e.fromTable, e.toTable, e);
       link(e.toTable, e.fromTable, e); // undirected — a join works either direction
     }
@@ -772,10 +855,33 @@ export class ContextService {
 /** Separator Metabase uses when it expands a nested JSONB/struct field. */
 const NESTED_SEP = "→";
 const SQL_PREVIEW_CHARS = 240;
+const RESERVED_SQL_ALIASES = new Set([
+  "all",
+  "and",
+  "any",
+  "as",
+  "asc",
+  "by",
+  "desc",
+  "for",
+  "from",
+  "group",
+  "in",
+  "join",
+  "on",
+  "or",
+  "order",
+  "select",
+  "table",
+  "use",
+  "user",
+  "where",
+  "with",
+]);
 
 /**
  * Project full column entities into slim, low-token records and collapse the
- * nested-JSONB leaves (e.g. "claim_form_a → ambulanceCharges") back under their
+ * nested-JSONB leaves (e.g. "intake_form → requestedAmount") back under their
  * parent field, annotating the parent with a nestedFields count. This is the fix
  * that keeps get_entity compact on wide/JSONB-heavy tables.
  */
@@ -811,4 +917,16 @@ export function compactColumns(cols: Entity[]): CompactColumn[] {
 export function compactAsset(a: Asset): Asset {
   if (!a.nativeSql || a.nativeSql.length <= SQL_PREVIEW_CHARS) return a;
   return { ...a, nativeSql: a.nativeSql.slice(0, SQL_PREVIEW_CHARS) + " …[truncated; use full=true]" };
+}
+
+function uniqueByQualifiedName<T extends { qualifiedName: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    const key = item.qualifiedName.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }

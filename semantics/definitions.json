@@ -1,27 +1,85 @@
 [
   {
-    "id": "claims.count",
-    "name": "claim count",
-    "synonyms": ["claims", "number of claims", "how many claims", "total claims"],
-    "description": "Count of rows in the canonical claims table.",
-    "table": "public.claims",
+    "id": "tickets.count",
+    "name": "ticket count",
+    "synonyms": ["tickets", "support tickets", "number of tickets", "how many tickets", "total tickets"],
+    "description": "Count of rows in the canonical support tickets table.",
+    "table": "public.tickets",
     "columns": [],
-    "definition": "COUNT(*) over public.claims.",
-    "sqlTemplate": "SELECT COUNT(*) AS claim_count FROM public.claims;",
+    "definition": "COUNT(*) over public.tickets.",
+    "sqlTemplate": "SELECT COUNT(*) AS ticket_count FROM public.tickets;",
     "measureExpression": "COUNT(*)",
+    "dimensions": {
+      "status": {
+        "name": "Ticket status",
+        "expression": "status",
+        "synonyms": ["status", "ticket status", "state"]
+      },
+      "priority": {
+        "name": "Ticket priority",
+        "expression": "priority",
+        "synonyms": ["priority", "severity", "urgency"]
+      },
+      "created_month": {
+        "name": "Created month",
+        "expression": "DATE_TRUNC('month', created_at)::date",
+        "synonyms": ["created month", "creation month", "month", "created at"]
+      }
+    },
     "databaseName": "app"
   },
   {
-    "id": "claims.csat_responses",
+    "id": "tickets.csat_responses",
     "name": "CSAT responses",
     "synonyms": ["CSAT", "customer satisfaction", "customer satisfaction responses", "survey responses"],
-    "description": "Claims with a non-empty CSAT rating or feedback response.",
-    "table": "public.claims",
-    "columns": ["public.claims.csat"],
+    "description": "Tickets with a non-empty CSAT rating or feedback response.",
+    "table": "public.tickets",
+    "columns": ["public.tickets.csat"],
     "definition": "A response is populated when csat.rating or csat.feedback is non-empty.",
-    "sqlTemplate": "SELECT COUNT(*) AS csat_response_count FROM public.claims WHERE csat IS NOT NULL AND csat <> '{}'::jsonb AND ((csat->>'rating') IS NOT NULL AND btrim(csat->>'rating') <> '' OR (csat->>'feedback') IS NOT NULL AND btrim(csat->>'feedback') <> '');",
+    "sqlTemplate": "SELECT COUNT(*) AS csat_response_count FROM public.tickets WHERE csat IS NOT NULL AND csat <> '{}'::jsonb AND ((csat->>'rating') IS NOT NULL AND btrim(csat->>'rating') <> '' OR (csat->>'feedback') IS NOT NULL AND btrim(csat->>'feedback') <> '');",
     "measureExpression": "COUNT(*)",
     "defaultFilter": "csat IS NOT NULL AND csat <> '{}'::jsonb AND ((csat->>'rating') IS NOT NULL AND btrim(csat->>'rating') <> '' OR (csat->>'feedback') IS NOT NULL AND btrim(csat->>'feedback') <> '')",
+    "dimensions": {
+      "status": {
+        "name": "Ticket status",
+        "expression": "status",
+        "synonyms": ["status", "ticket status", "state"]
+      },
+      "priority": {
+        "name": "Ticket priority",
+        "expression": "priority",
+        "synonyms": ["priority", "severity", "urgency"]
+      },
+      "created_month": {
+        "name": "Created month",
+        "expression": "DATE_TRUNC('month', created_at)::date",
+        "synonyms": ["created month", "creation month", "month", "created at"]
+      }
+    },
+    "databaseName": "app"
+  },
+  {
+    "id": "orders.count",
+    "name": "order count",
+    "synonyms": ["orders", "number of orders", "how many orders", "total orders"],
+    "description": "Count of rows in the canonical orders table.",
+    "table": "public.orders",
+    "columns": [],
+    "definition": "COUNT(*) over public.orders.",
+    "sqlTemplate": "SELECT COUNT(*) AS order_count FROM public.orders;",
+    "measureExpression": "COUNT(*)",
+    "dimensions": {
+      "status": {
+        "name": "Order status",
+        "expression": "status",
+        "synonyms": ["status", "order status", "state"]
+      },
+      "created_month": {
+        "name": "Created month",
+        "expression": "DATE_TRUNC('month', created_at)::date",
+        "synonyms": ["created month", "creation month", "month", "created at"]
+      }
+    },
     "databaseName": "app"
   }
 ]

@@ -18,13 +18,13 @@ test("compactColumns projects to name/type/semanticType", () => {
 
 test("compactColumns collapses nested JSONB leaves under their parent with a count", () => {
   const cols = [
-    col("claim_form_a", "jsonb"),
-    col("claim_form_a → ambulanceCharges", "text"),
-    col("claim_form_a → hospitalName", "text"),
+    col("intake_form", "jsonb"),
+    col("intake_form → requestedAmount", "text"),
+    col("intake_form → customerName", "text"),
     col("id", "int8"),
   ];
   const out = compactColumns(cols);
-  const parent = out.find((c) => c.name === "claim_form_a");
+  const parent = out.find((c) => c.name === "intake_form");
   assert.equal(parent.nestedFields, 2, "parent gets nested count");
   assert.equal(out.length, 2, "leaves collapsed; only parent + id remain");
   assert.ok(!out.some((c) => c.name.includes("→")), "no expanded leaves leak through");

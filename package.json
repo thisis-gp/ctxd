@@ -59,6 +59,9 @@
     "pretest": "npm run build",
     "test": "node --test",
     "test:integration": "node scripts/itest.mjs",
+    "test:eval": "yarn build && node scripts/generic-eval-check.mjs",
+    "test:semantic": "yarn build && node scripts/semantic-check.mjs",
+    "test:semantic:db": "yarn build && node scripts/semantic-check.mjs --db",
     "benchmark:compare": "node dist/cli.js benchmark compare examples/benchmark.json examples/benchmark-direct-observations.json examples/benchmark-context-observations.json",
     "release:gate": "node dist/cli.js release-gate",
     "clean": "rimraf dist"

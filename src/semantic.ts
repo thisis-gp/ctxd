@@ -239,13 +239,15 @@ export function rankSemanticDefinitions(
   limit = 5,
 ): SemanticMatch[] {
   const q = tokens(question);
+  const normalizedQuestion = normalizePhrase(question);
   return definitions
     .map((definition) => {
       const phrases = [definition.name, ...definition.synonyms];
       const score = phrases.reduce((best, phrase) => {
         const phraseTokens = tokens(phrase);
         const overlap = [...phraseTokens].filter((token) => q.has(token)).length;
-        const exact = phrase.toLowerCase().includes(question.toLowerCase().trim()) ? 5 : 0;
+        const normalizedPhrase = normalizePhrase(phrase);
+        const exact = normalizedPhrase && normalizedQuestion.includes(normalizedPhrase) ? 5 : 0;
         return Math.max(best, overlap + exact);
       }, 0);
       return { definition, score };
@@ -254,6 +256,10 @@ export function rankSemanticDefinitions(
     .sort((a, b) => b.score - a.score || a.definition.id.localeCompare(b.definition.id))
     .slice(0, limit)
     .map((hit) => ({ definition: hit.definition, score: hit.score }));
+}
+
+function normalizePhrase(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 export function validateSemanticDefinitions(

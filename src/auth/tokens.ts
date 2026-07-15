@@ -34,6 +34,13 @@ export interface IssuedToken {
   createdAt: string;
 }
 
+export class TokenStoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TokenStoreError";
+  }
+}
+
 function hashToken(raw: string): string {
   return createHash("sha256").update(raw, "utf8").digest("hex");
 }
@@ -52,12 +59,16 @@ export function generateRawToken(): string {
 export class TokenStore {
   constructor(private readonly filePath: string) {}
 
+  private get lockPath(): string {
+    return `${this.filePath}.lock`;
+  }
+
   private async load(): Promise<TokenStoreFile> {
     if (!existsSync(this.filePath)) return { version: 1, tokens: [] };
     const raw = await readFile(this.filePath, "utf8");
     const parsed = JSON.parse(raw) as TokenStoreFile;
     if (parsed.version !== 1 || !Array.isArray(parsed.tokens)) {
-      throw new Error(`Invalid token store at ${this.filePath}`);
+      throw new TokenStoreError(`Invalid token store at ${this.filePath}`);
     }
     return parsed;
   }
@@ -81,6 +92,29 @@ export class TokenStore {
     }
   }
 
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    await mkdir(path.dirname(this.filePath), { recursive: true });
+    const started = Date.now();
+    while (true) {
+      try {
+        await mkdir(this.lockPath);
+        break;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== "EEXIST") throw err;
+        if (Date.now() - started > 5000) {
+          throw new TokenStoreError(`Timed out waiting for token store lock at ${this.lockPath}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
+    try {
+      return await fn();
+    } finally {
+      await rm(this.lockPath, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   async list(): Promise<Omit<TokenRecord, "tokenHash">[]> {
     const data = await this.load();
     return data.tokens.map(({ tokenHash: _h, ...rest }) => rest);
@@ -88,40 +122,46 @@ export class TokenStore {
 
   async create(name: string): Promise<IssuedToken> {
     const trimmed = name.trim();
-    if (!trimmed) throw new Error("Token name is required.");
-    const data = await this.load();
-    const raw = generateRawToken();
-    const createdAt = new Date().toISOString();
-    const record: TokenRecord = {
-      id: randomUUID(),
-      name: trimmed,
-      tokenHash: hashToken(raw),
-      createdAt,
-    };
-    data.tokens.push(record);
-    await this.save(data);
-    return { id: record.id, name: record.name, token: raw, createdAt };
+    if (!trimmed) throw new TokenStoreError("Token name is required.");
+    return this.withLock(async () => {
+      const data = await this.load();
+      const raw = generateRawToken();
+      const createdAt = new Date().toISOString();
+      const record: TokenRecord = {
+        id: randomUUID(),
+        name: trimmed,
+        tokenHash: hashToken(raw),
+        createdAt,
+      };
+      data.tokens.push(record);
+      await this.save(data);
+      return { id: record.id, name: record.name, token: raw, createdAt };
+    });
   }
 
   async revoke(id: string): Promise<boolean> {
-    const data = await this.load();
-    const row = data.tokens.find((t) => t.id === id);
-    if (!row || row.revokedAt) return false;
-    row.revokedAt = new Date().toISOString();
-    await this.save(data);
-    return true;
+    return this.withLock(async () => {
+      const data = await this.load();
+      const row = data.tokens.find((t) => t.id === id);
+      if (!row || row.revokedAt) return false;
+      row.revokedAt = new Date().toISOString();
+      await this.save(data);
+      return true;
+    });
   }
 
   /** Verify a raw bearer token; updates lastUsedAt on success. */
   async verify(rawToken: string): Promise<TokenRecord | undefined> {
     if (!rawToken) return undefined;
-    const want = hashToken(rawToken);
-    const data = await this.load();
-    const row = data.tokens.find((t) => !t.revokedAt && safeEqualHex(t.tokenHash, want));
-    if (!row) return undefined;
-    row.lastUsedAt = new Date().toISOString();
-    await this.save(data);
-    return row;
+    return this.withLock(async () => {
+      const want = hashToken(rawToken);
+      const data = await this.load();
+      const row = data.tokens.find((t) => !t.revokedAt && safeEqualHex(t.tokenHash, want));
+      if (!row) return undefined;
+      row.lastUsedAt = new Date().toISOString();
+      await this.save(data);
+      return row;
+    });
   }
 }
 

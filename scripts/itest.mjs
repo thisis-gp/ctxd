@@ -40,7 +40,20 @@ const manifest = {
 };
 
 await writeSnapshotFiles(dir, release, model, manifest);
-await writeFile(snapshotPaths(dir, release).semantics, "[]\n", "utf8");
+await writeFile(snapshotPaths(dir, release).semantics, JSON.stringify([
+  {
+    id: "users.count",
+    name: "Active users",
+    synonyms: ["active users", "users"],
+    description: "Count of active users.",
+    table: "public.users",
+    columns: ["public.users.id"],
+    definition: "A user row in public.users.",
+    sqlTemplate: "SELECT COUNT(*) AS user_count FROM public.users;",
+    measureExpression: "COUNT(*)",
+    databaseName: "appdb",
+  },
+]) + "\n", "utf8");
 const w = new SnapshotWriter(snapshotPaths(dir, release).search);
 w.write(model);
 w.close();
@@ -73,6 +86,11 @@ const jp = svc.getJoinPath("public.orders", "public.users");
 assert(jp.path && jp.hops === 1, "join-path orders->users is 1 hop");
 const plan = svc.planQuery("orders by user");
 assert(plan.joinPaths.some((j) => j.joins.length === 1 && j.joins[0].toTable === "public.users"), "plan_query returns orders->users join path in one call");
+assert(!/\busers\s+use\b/i.test(plan.suggestedFrom ?? ""), "plan_query avoids reserved SQL aliases in suggested FROM");
+const semanticPlan = svc.planQuery("How many active users did we receive?");
+assert(semanticPlan.recommendedTables.length === 1 && semanticPlan.recommendedTables[0] === "public.users", "semantic metric plan does not over-add search tables");
+assert(semanticPlan.intent === "metric_only" && semanticPlan.confidence === "high", "semantic metric plan reports high-confidence metric intent");
+assert(semanticPlan.suggestedSemanticQuery?.measures?.[0] === "users.count", "semantic metric plan suggests a declarative semantic query");
 const jpSame = svc.getJoinPath("public.orders", "public.orders");
 assert(jpSame.path && jpSame.hops === 0, "join-path to self is 0 hops");
 const jpNone = svc.getJoinPath("public.users", "public.orders");
@@ -88,6 +106,7 @@ const guarded = new ContextService({
   snapshotDir: dir,
   queryRowLimit: 1000,
   queryTimeoutMs: 15000,
+  allowQueryExecution: true,
   metabaseClient: { runNativeQuery: async () => { metabaseCalls++; return { data: { rows: [], cols: [] }, row_count: 0 }; } },
   allowedDatabaseIds: [1],
 });

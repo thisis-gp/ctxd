@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Snapshot refresh now skips schema-mismatched semantic definitions by default, so the generic OSS examples do not block first-time setup on arbitrary databases. `CTXD_STRICT_SEMANTICS=true` restores fail-closed release gating.
+- Planner now prefers matched semantic metric tables and avoids adding unrelated search-hit tables unless the question asks for grouping/dimensions or no useful semantic match exists.
+- Integration test now opts into query execution when testing execution-path schema reference validation.
+
+### Added
+
+- `ctxd doctor` checks env/config, Metabase connectivity, current snapshot, semantic readiness, and HTTP/admin-token setup without printing secrets.
+- Hybrid planner ranker that reranks BM25 candidates using semantic metric ownership, domain synonyms, exact/token matches, join distance, and history/staging penalties with visible score reasons.
+- Planner intent and confidence metadata with `suggestedSemanticQuery` fast paths for high-confidence semantic metric questions.
+- Generic support-ticket/order semantic examples with reviewed same-table dimensions for metric and CSAT-style queries.
+- Generic planner eval script with a self-contained fixture for semantic planning, grouped dimensions, lookup ranking, and join exploration.
+- Semantic-check script that compiles every measure/dimension combination and can execute them through caller-provided `psql`.
+- Active snapshots now cache relationship lists and join graphs so query planning does not repeatedly rescan all relationships.
+- Token store writes are serialized with a file lock to avoid concurrent admin/token requests overwriting each other.
+- Denylist supports wildcard column rules such as `*.password_hash` and `schema.*.access_token`.
+
 ## [0.1.0] - 2026-07-14
 
 ### Added

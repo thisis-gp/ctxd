@@ -92,6 +92,8 @@ Open **https://$CTXD_DOMAIN/admin**, sign in with `CTXD_ADMIN_TOKEN`, and create
 ```
 
 Health: `GET /health`. MCP: `POST /mcp` (per-user Bearer). Admin: `/admin`.
+For production, put `/admin` behind your VPN, SSO proxy, or an IP allowlist even
+though the dashboard also requires `CTXD_ADMIN_TOKEN`.
 
 ### Local developer (stdio)
 
@@ -130,6 +132,8 @@ instead of dumping the whole model into the conversation.
 | Snapshot | `src/snapshot/` | Deterministic fingerprint, JSONL + SQLite, manifest, diff |
 | Release | `src/release/manager.ts` | `current` pointer lifecycle: validate → publish → promote → rollback |
 | Retrieval | `src/context-service.ts` | Search, entity context, freshness, SQL validation, read-only exec |
+| Hybrid ranker | `src/ranker.ts` | Rerank BM25 candidates with semantic ownership, synonyms, join distance, and safety penalties |
+| Intent planner | `src/intent.ts` | Classify questions, score plan confidence, and emit semantic-query fast paths |
 | MCP | `src/mcp/server.ts`, `src/mcp/http.ts` | Fourteen `context_*` tools over stdio or remote HTTP |
 | Adapters | `src/adapters/` | Import dbt, Cube, and MetricFlow JSON metadata into the same normalized model |
 | Contract draft | `src/contract-draft.ts` | Generate a reviewable starting contract from a snapshot or adapter export |
@@ -146,7 +150,13 @@ yarn install
 yarn build
 node dist/cli.js init      # scaffolds .env from .env.example
 # edit .env: set METABASE_URL and METABASE_API_KEY
+node dist/cli.js doctor    # checks env, Metabase, snapshot, semantics, and HTTP config
 ```
+
+The checked-in semantic file is a generic example. By default, `refresh` skips
+semantic definitions that do not match the connected database and still builds a
+usable metadata/search snapshot. Set `CTXD_STRICT_SEMANTICS=true` once your own
+semantic definitions should fail the release when they drift from the database.
 
 ## Building a snapshot
 
@@ -175,12 +185,13 @@ node dist/cli.js snapshot rollback
 ```bash
 node dist/cli.js search "active user subscriptions"
 node dist/cli.js search "invoices" --scope tables
-node dist/cli.js join-path public.claim_files public.benefits  # shortest FK join path
+node dist/cli.js join-path public.orders public.customers      # shortest FK join path
 node dist/cli.js diff                                          # schema changes vs previous release
 node dist/cli.js drift                                         # is the current snapshot stale vs live Metabase?
 node dist/cli.js freshness
 node dist/cli.js stats            # token/latency savings dashboard from recorded MCP usage
-node dist/cli.js query "SELECT COUNT(*) AS claim_count FROM public.claims;"
+node dist/cli.js doctor           # readiness check without printing secrets
+node dist/cli.js query "SELECT COUNT(*) AS ticket_count FROM public.tickets;"
 ```
 
 ## Importing other metadata tools
@@ -233,7 +244,12 @@ For `--http`, users only need the URL and their **personal** Bearer token (issue
 | `context_validate_sql` | Check a statement is read-only (no execution) |
 | `context_run_*` | **Hidden by default.** Execute via Metabase only when `CTXD_ALLOW_QUERY=true` |
 
-Every response embeds the source snapshot + release version.
+Every response embeds the source snapshot + release version. Planner responses
+also include ranked table/column candidates with score reasons so agents can see
+why a candidate was selected instead of blindly trusting BM25 order.
+When a reviewed semantic metric answers the question directly, planner responses
+also include intent, confidence, confidence reasons, and a `suggestedSemanticQuery`
+payload that can be compiled without scanning database metadata.
 
 ### Context contract
 
@@ -287,8 +303,8 @@ formula, default filters, row cap, and read-only execution.
 
 ```json
 {
-  "measures": ["claims.csat_responses"],
-  "dimensions": [],
+  "measures": ["tickets.csat_responses"],
+  "dimensions": ["status"],
   "limit": 100
 }
 ```
@@ -297,6 +313,32 @@ Use `context_compile_semantic_query` to get generated SQL, validate with
 `context_validate_sql`, then run it in Metabase. Cross-table measures are rejected
 until a reviewed join graph is registered. (`context_run_semantic_query` exists only
 when `CTXD_ALLOW_QUERY=true`.)
+
+The sample support-ticket semantics include reviewed same-table dimensions such
+as `status`, `priority`, and `created_month`. This lets questions such as
+"CSAT responses by ticket status" compile without asking the agent to inspect
+`information_schema`.
+
+### Eval Checks
+
+Run the generic planner golden set:
+
+```bash
+yarn test:eval
+```
+
+To compile every semantic measure/dimension combination:
+
+```bash
+yarn test:semantic
+```
+
+To execute the compiled semantic SQL against your own database, configure `psql`
+through standard Postgres environment variables or set `CTXD_SEMANTIC_CHECK_PSQL`:
+
+```bash
+yarn test:semantic:db
+```
 
 ## Safety
 
@@ -310,6 +352,8 @@ when `CTXD_ALLOW_QUERY=true`.)
   and validate table/column references against the active snapshot.
 - Sensitive tables/fields can be denylisted (`DENYLIST` env) — they stay indexed
   but carry no descriptions and cannot be referenced in validated/executed SQL.
+  Supported entries include `schema.table`, `table`, `table.column`,
+  `schema.table.column`, `*.column`, and `schema.*.column`.
 - Reviewed semantic and contract definition files may contain raw SQL expressions;
   treat those files like code.
 - Snapshots store metadata and query *definitions* only, never production rows.

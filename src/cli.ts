@@ -25,12 +25,17 @@ import { logger } from "./logger.js";
 import { MetabaseClient } from "./metabase/client.js";
 import { ReleaseManager } from "./release/manager.js";
 import { buildSnapshot, checkDrift } from "./snapshot/builder.js";
+import { readSnapshotModel } from "./snapshot/manifest.js";
 import { TokenStore, defaultTokenStorePath } from "./auth/tokens.js";
 import { refreshFromMetabase } from "./refresh.js";
 import { generateConnectorToken, serveHttpMcp } from "./mcp/http.js";
 import { serveMcp } from "./mcp/server.js";
 import { readMetrics, summarize, type StatsSummary } from "./metrics.js";
-import { zSemanticQuery } from "./semantic.js";
+import {
+  loadSemanticDefinitions,
+  validateSemanticDefinitions,
+  zSemanticQuery,
+} from "./semantic.js";
 import { loadContextContract, validateContextContract } from "./contract.js";
 import { compareBenchmarkRuns, evaluateBenchmark, loadBenchmark, type BenchmarkObservation } from "./benchmark.js";
 import { ADAPTERS, loadModelFromAdapter, type AdapterKind } from "./adapters/index.js";
@@ -75,6 +80,23 @@ function renderStatsDashboard(s: StatsSummary): void {
   lines.push("");
   lines.push(`  note: ${s.note}`);
   process.stdout.write(lines.join("\n") + "\n");
+}
+
+interface DoctorCheck {
+  name: string;
+  ok: boolean;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+}
+
+function addCheck(
+  checks: DoctorCheck[],
+  name: string,
+  ok: boolean,
+  detail: string,
+  status: DoctorCheck["status"] = ok ? "pass" : "fail",
+): void {
+  checks.push({ name, ok, status, detail });
 }
 
 /** Build a ContextService for local read commands, attaching a Metabase client if creds exist. */
@@ -128,6 +150,114 @@ program
     const snapshotDir = process.env.SNAPSHOT_DIR ?? "./snapshots";
     await mkdir(snapshotDir, { recursive: true });
     print({ ok: true, envPath, snapshotDir });
+  });
+
+program
+  .command("doctor")
+  .description("Check local env, Metabase connectivity, current snapshot, and semantic readiness.")
+  .action(async () => {
+    const checks: DoctorCheck[] = [];
+    const envPath = path.join(process.cwd(), ".env");
+    addCheck(
+      checks,
+      "env_file",
+      existsSync(envPath),
+      existsSync(envPath) ? ".env exists" : ".env missing; run `ctxd init` and fill in credentials",
+    );
+
+    let config: ReturnType<typeof loadConfig> | undefined;
+    try {
+      config = loadConfig();
+      addCheck(checks, "config", true, "required configuration is present");
+    } catch (err) {
+      addCheck(checks, "config", false, (err as Error).message);
+    }
+
+    const local = loadLocalConfig();
+    if (config) {
+      try {
+        const client = new MetabaseClient({
+          baseUrl: config.metabaseUrl,
+          apiKey: config.metabaseApiKey,
+          timeoutMs: config.queryTimeoutMs,
+        });
+        await client.ping();
+        addCheck(checks, "metabase", true, "connected to configured Metabase instance");
+      } catch (err) {
+        addCheck(checks, "metabase", false, `Metabase ping failed: ${(err as Error).message}`);
+      }
+    } else {
+      addCheck(checks, "metabase", false, "skipped because required configuration is invalid");
+    }
+
+    const manager = new ReleaseManager((config ?? local).snapshotDir);
+    let currentRelease: string | undefined;
+    try {
+      const current = await manager.getCurrent();
+      currentRelease = current?.release;
+      addCheck(
+        checks,
+        "current_snapshot",
+        Boolean(currentRelease),
+        currentRelease ? `current release is ${currentRelease}` : "no current snapshot; run `ctxd refresh`",
+        currentRelease ? "pass" : "warn",
+      );
+    } catch (err) {
+      addCheck(checks, "current_snapshot", false, `could not read current snapshot: ${(err as Error).message}`);
+    }
+
+    try {
+      const definitions = await loadSemanticDefinitions((config ?? local).semanticDefinitionsFile);
+      if (!currentRelease) {
+        addCheck(
+          checks,
+          "semantics",
+          true,
+          `${definitions.length} definitions parsed; table references will be validated after a snapshot exists`,
+          "warn",
+        );
+      } else {
+        const model = await readSnapshotModel((config ?? local).snapshotDir, currentRelease);
+        try {
+          validateSemanticDefinitions(definitions, model);
+          addCheck(checks, "semantics", true, `${definitions.length} definitions match the current snapshot`);
+        } catch (err) {
+          const strict = (config ?? local).strictSemantics;
+          addCheck(
+            checks,
+            "semantics",
+            !strict,
+            strict
+              ? `semantic definitions fail strict validation: ${(err as Error).message}`
+              : `semantic definitions will be skipped during refresh: ${(err as Error).message}`,
+            strict ? "fail" : "warn",
+          );
+        }
+      }
+    } catch (err) {
+      addCheck(checks, "semantics", false, (err as Error).message);
+    }
+
+    addCheck(
+      checks,
+      "admin_token",
+      local.adminToken.length >= 16,
+      local.adminToken.length >= 16
+        ? "CTXD_ADMIN_TOKEN is set"
+        : "CTXD_ADMIN_TOKEN missing or too short; run `ctxd token admin-secret`",
+      local.adminToken.length >= 16 ? "pass" : "warn",
+    );
+
+    addCheck(
+      checks,
+      "http",
+      local.httpPort > 0,
+      `HTTP server configured on ${local.httpHost}:${local.httpPort}`,
+    );
+
+    const ok = checks.every((check) => check.ok);
+    print({ ok, checks });
+    if (!ok) process.exitCode = 1;
   });
 
 const snapshot = program.command("snapshot").description("Build and manage context snapshots.");

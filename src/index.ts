@@ -3,6 +3,8 @@ export * from "./contract.js";
 export * from "./contract-draft.js";
 export * from "./errors.js";
 export * from "./join-graph.js";
+export * from "./intent.js";
+export * from "./ranker.js";
 export * from "./adapters/index.js";
 export * from "./refresh.js";
 export * from "./release/gate.js";

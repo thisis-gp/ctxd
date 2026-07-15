@@ -61,6 +61,7 @@ services:
     volumes:
       - ctxd-data:/data
       - ./semantics:/app/semantics:ro
+      - ./context.contract.json:/app/context.contract.json:ro
     entrypoint: ["node", "dist/cli.js", "refresh", "--prune-keep", "14"]
 
 volumes:

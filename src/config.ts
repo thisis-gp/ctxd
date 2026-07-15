@@ -21,6 +21,12 @@ export interface AppConfig {
   metabaseInstance: string;
   snapshotDir: string;
   semanticDefinitionsFile: string;
+  /**
+   * When true, snapshot builds fail if semantic definitions reference tables
+   * absent from the connected database. Default false keeps the OSS sample file
+   * from blocking first-time refreshes against arbitrary databases.
+   */
+  strictSemantics: boolean;
   contextContractFile: string;
   queryRowLimit: number;
   queryTimeoutMs: number;
@@ -49,6 +55,11 @@ const envSchema = z.object({
   METABASE_INSTANCE: z.string().optional().default("production"),
   SNAPSHOT_DIR: z.string().optional().default("./snapshots"),
   SEMANTIC_DEFINITIONS_FILE: z.string().optional().default("./semantics/definitions.json"),
+  CTXD_STRICT_SEMANTICS: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v.toLowerCase() === "true" || v === "1"),
   CONTEXT_CONTRACT_FILE: z.string().optional().default("./context.contract.json"),
   QUERY_ROW_LIMIT: z.coerce.number().int().positive().optional().default(1000),
   QUERY_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(15000),
@@ -115,6 +126,7 @@ export function loadConfig(): AppConfig {
     metabaseInstance: e.METABASE_INSTANCE,
     snapshotDir: e.SNAPSHOT_DIR,
     semanticDefinitionsFile: e.SEMANTIC_DEFINITIONS_FILE,
+    strictSemantics: e.CTXD_STRICT_SEMANTICS,
     contextContractFile: e.CONTEXT_CONTRACT_FILE,
     queryRowLimit: e.QUERY_ROW_LIMIT,
     queryTimeoutMs: e.QUERY_TIMEOUT_MS,
@@ -142,6 +154,7 @@ export function loadLocalConfig(): Pick<
   AppConfig,
   | "snapshotDir"
   | "semanticDefinitionsFile"
+  | "strictSemantics"
   | "contextContractFile"
   | "queryRowLimit"
   | "queryTimeoutMs"
@@ -156,6 +169,7 @@ export function loadLocalConfig(): Pick<
   return {
     snapshotDir: process.env.SNAPSHOT_DIR ?? "./snapshots",
     semanticDefinitionsFile: process.env.SEMANTIC_DEFINITIONS_FILE ?? "./semantics/definitions.json",
+    strictSemantics: parseBool(process.env.CTXD_STRICT_SEMANTICS, false),
     contextContractFile: process.env.CONTEXT_CONTRACT_FILE ?? "./context.contract.json",
     queryRowLimit: parsePositiveInt(process.env.QUERY_ROW_LIMIT, 1000),
     queryTimeoutMs: parsePositiveInt(process.env.QUERY_TIMEOUT_MS, 15000),

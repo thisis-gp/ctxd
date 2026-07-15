@@ -40,3 +40,21 @@ test("TokenStore create/list/verify/revoke", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("TokenStore serializes concurrent token creation", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "ctxd-tokens-concurrent-"));
+  try {
+    const store = new TokenStore(defaultTokenStorePath(dir));
+    await Promise.all(
+      Array.from({ length: 8 }, (_value, index) => store.create(`user-${index}`)),
+    );
+    const listed = await store.list();
+    assert.equal(listed.length, 8);
+    assert.deepEqual(
+      listed.map((item) => item.name).sort(),
+      Array.from({ length: 8 }, (_value, index) => `user-${index}`),
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

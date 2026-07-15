@@ -66,7 +66,7 @@ export interface SavingsBaseline {
   msPerDiscovery: number;
 }
 
-/** Defaults from the measured fair-baseline scenario on staging (~5k tok / ~1.5s). */
+/** Defaults for a conservative schema-discovery baseline (~5k tok / ~1.5s). */
 export const DEFAULT_BASELINE: SavingsBaseline = {
   tokensPerDiscovery: 5000,
   msPerDiscovery: 1500,

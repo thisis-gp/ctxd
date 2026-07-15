@@ -30,7 +30,11 @@ import {
 import { currentPointerPath, snapshotPaths } from "./paths.js";
 import { SnapshotWriter } from "./store.js";
 import type { CurrentPointer, SnapshotManifest } from "./types.js";
-import { loadSemanticDefinitions, validateSemanticDefinitions } from "../semantic.js";
+import {
+  loadSemanticDefinitions,
+  validateSemanticDefinitions,
+  type SemanticDefinition,
+} from "../semantic.js";
 
 const BUILDER_VERSION = "0.1.0";
 
@@ -79,6 +83,26 @@ function countModel(model: NormalizedModel) {
     relationships: model.relationships.length,
     assets: model.assets.length,
   };
+}
+
+function validateOrSkipSemanticDefinitions(
+  definitions: SemanticDefinition[],
+  model: NormalizedModel,
+  config: AppConfig,
+): SemanticDefinition[] {
+  try {
+    validateSemanticDefinitions(definitions, model);
+    return definitions;
+  } catch (err) {
+    if (config.strictSemantics) throw err;
+    logger.warn("semantic definitions skipped because they do not match the connected database", {
+      file: config.semanticDefinitionsFile,
+      definitions: definitions.length,
+      reason: (err as Error).message,
+      hint: "Set CTXD_STRICT_SEMANTICS=true to make this a build failure.",
+    });
+    return [];
+  }
 }
 
 /**
@@ -203,7 +227,11 @@ export async function buildSnapshot(
     relationships: meta.relationships,
     assets: content.assets,
   };
-  validateSemanticDefinitions(semanticDefinitions, model);
+  const validatedSemanticDefinitions = validateOrSkipSemanticDefinitions(
+    semanticDefinitions,
+    model,
+    config,
+  );
 
   const fingerprint = computeSchemaFingerprint(model);
   const counts = countModel(model);
@@ -222,7 +250,7 @@ export async function buildSnapshot(
 
   // Write inspectable JSONL sources + manifest.
   await writeSnapshotFiles(config.snapshotDir, opts.release, model, manifest);
-  await writeFile(paths.semantics, JSON.stringify(semanticDefinitions, null, 2) + "\n", "utf8");
+  await writeFile(paths.semantics, JSON.stringify(validatedSemanticDefinitions, null, 2) + "\n", "utf8");
 
   // Build the search index.
   const writer = new SnapshotWriter(paths.search);

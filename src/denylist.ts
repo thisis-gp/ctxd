@@ -9,6 +9,8 @@ import type { Entity } from "./model.js";
  *   - "table"               -> masks any table with that bare name, and its columns
  *   - "schema.table.column" -> masks a single column
  *   - "table.column"        -> masks a column by bare table + column name
+ *   - "*.column"            -> masks a column name on every table
+ *   - "schema.*.column"     -> masks a column name on every table in a schema
  *
  * Denylisted entities are still *indexed* (so an agent knows they exist) but are
  * flagged `denylisted: true` and never carry descriptions or sample values.
@@ -38,6 +40,8 @@ export class Denylist {
     if (this.isTableDenied(schema, table)) return true;
     const t = table.toLowerCase();
     const c = column.toLowerCase();
+    if (this.entries.has(`*.${c}`)) return true;
+    if (schema && this.entries.has(`${schema.toLowerCase()}.*.${c}`)) return true;
     if (this.entries.has(`${t}.${c}`)) return true;
     if (schema && this.entries.has(`${schema.toLowerCase()}.${t}.${c}`)) return true;
     return false;

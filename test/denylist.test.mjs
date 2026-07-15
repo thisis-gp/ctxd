@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import { Denylist, rejectIfDenylisted } from "../dist/denylist.js";
 import { SchemaReferenceError } from "../dist/errors.js";
 
-test("Denylist matches schema.table, bare table, and column entries", () => {
-  const d = new Denylist(["public.secrets", "users.email", "tokens"]);
+test("Denylist matches schema.table, bare table, column, and wildcard column entries", () => {
+  const d = new Denylist(["public.secrets", "users.email", "tokens", "*.password_hash", "private.*.access_token"]);
   assert.equal(d.isTableDenied("public", "secrets"), true);
   assert.equal(d.isTableDenied(undefined, "tokens"), true);
   assert.equal(d.isTableDenied("public", "users"), false);
   assert.equal(d.isColumnDenied("public", "users", "email"), true);
+  assert.equal(d.isColumnDenied("public", "users", "password_hash"), true);
+  assert.equal(d.isColumnDenied("private", "oauth_tokens", "access_token"), true);
+  assert.equal(d.isColumnDenied("public", "oauth_tokens", "access_token"), false);
   assert.equal(d.isColumnDenied("public", "users", "id"), false);
 });
 
@@ -30,10 +33,10 @@ test("rejectIfDenylisted throws for denylisted entities", () => {
 
 test("rejectIfDenylisted is a no-op for normal entities", () => {
   rejectIfDenylisted({
-    id: "table:public.claims",
+    id: "table:public.tickets",
     kind: "table",
-    name: "claims",
-    qualifiedName: "public.claims",
+    name: "tickets",
+    qualifiedName: "public.tickets",
     databaseId: 1,
     databaseName: "db",
   });

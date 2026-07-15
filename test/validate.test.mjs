@@ -20,11 +20,11 @@ test("rejects stacked statements", () => {
 });
 
 test("allows forbidden words inside string literals and column names", () => {
-  assert.equal(validateReadOnlySql("SELECT 'update' AS note FROM public.claims").ok, true);
-  assert.equal(validateReadOnlySql("SELECT status FROM public.claims WHERE status = 'locked'").ok, true);
-  assert.equal(validateReadOnlySql("SELECT lock FROM public.claims").ok, true);
-  assert.equal(validateReadOnlySql("SELECT * FROM public.claims WHERE note LIKE '%replace%'").ok, true);
-  assert.equal(validateReadOnlySql("SELECT created_at, updated_at FROM public.claims").ok, true);
+  assert.equal(validateReadOnlySql("SELECT 'update' AS note FROM public.tickets").ok, true);
+  assert.equal(validateReadOnlySql("SELECT status FROM public.tickets WHERE status = 'locked'").ok, true);
+  assert.equal(validateReadOnlySql("SELECT lock FROM public.tickets").ok, true);
+  assert.equal(validateReadOnlySql("SELECT * FROM public.tickets WHERE note LIKE '%replace%'").ok, true);
+  assert.equal(validateReadOnlySql("SELECT created_at, updated_at FROM public.tickets").ok, true);
 });
 
 test("rejects SELECT ... INTO (creates a table)", () => {
@@ -46,7 +46,7 @@ test("enforceLimit appends a limit when missing", () => {
 });
 
 test("enforceLimit clamps an oversized limit down to the cap", () => {
-  const out = enforceLimit("SELECT * FROM claims LIMIT 1000000", 1000);
+  const out = enforceLimit("SELECT * FROM tickets LIMIT 1000000", 1000);
   assert.match(out, /LIMIT 1000\b/);
   assert.doesNotMatch(out, /1000000/);
 });
@@ -56,8 +56,8 @@ test("enforceLimit leaves a smaller limit untouched", () => {
 });
 
 test("extracts physical tables and aliased columns", () => {
-  const refs = extractSqlReferences("SELECT c.id, o.name FROM public.claims c JOIN public.orgs o ON c.user_id = o.id");
-  assert.deepEqual(refs.tables.sort(), ["public.claims", "public.orgs"]);
-  assert.ok(refs.columns.some((c) => c.table === "public.claims" && c.column === "id"));
-  assert.ok(refs.columns.some((c) => c.table === "public.orgs" && c.column === "name"));
+  const refs = extractSqlReferences("SELECT t.id, c.name FROM public.tickets t JOIN public.customers c ON t.customer_id = c.id");
+  assert.deepEqual(refs.tables.sort(), ["public.customers", "public.tickets"]);
+  assert.ok(refs.columns.some((c) => c.table === "public.tickets" && c.column === "id"));
+  assert.ok(refs.columns.some((c) => c.table === "public.customers" && c.column === "name"));
 });
