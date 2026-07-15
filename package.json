@@ -38,6 +38,14 @@
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thisis-gp/ctxd.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thisis-gp/ctxd/issues"
+  },
+  "homepage": "https://github.com/thisis-gp/ctxd#readme",
   "publishConfig": {
     "access": "public"
   },

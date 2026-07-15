@@ -23,7 +23,7 @@ npx ctxd init
 **From source** (recommended for development and contributions):
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/thisis-gp/ctxd.git
 cd ctxd
 npm install   # or: corepack enable && yarn install
 npm test
@@ -213,7 +213,7 @@ npx ctxd serve --http          # shared org MCP at http://HOST:8787/mcp
 ```
 
 Register it with Claude Code / Codex (see `examples/mcp-config.json`).
-For `--http`, users only need the URL and `CTXD_TOKEN` — not Metabase credentials.
+For `--http`, users only need the URL and their **personal** Bearer token (issued at `/admin`) — not Metabase credentials.
 
 ### MCP tools
 

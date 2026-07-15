@@ -29,5 +29,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTP connector auth is separate from Metabase; Metabase keys stay on the server.
 - Query execution through ctxd is opt-in (`CTXD_ALLOW_QUERY`); default is context + SQL compile only.
 
-[Unreleased]: https://github.com/YOUR_ORG/ctxd/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/YOUR_ORG/ctxd/releases/tag/v0.1.0
+[Unreleased]: https://github.com/thisis-gp/ctxd/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/thisis-gp/ctxd/releases/tag/v0.1.0

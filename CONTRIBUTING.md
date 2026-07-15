@@ -5,7 +5,7 @@ Thanks for helping improve ctxd. This project is MIT-licensed OSS.
 ## Development setup
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/thisis-gp/ctxd.git
 cd ctxd
 npm install          # or: corepack enable && yarn install
 npm test             # builds + runs unit tests (27 cases)
