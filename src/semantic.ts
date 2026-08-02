@@ -190,6 +190,7 @@ export function compileSemanticQuery(query: SemanticQuery, definitions: Semantic
   };
   const projections = dimensionOwners.map((dimension) => `${dimension.expression} AS "${aliasFor(dimension.id)}"`);
   const measureAliases = new Map<string, string>();
+  const measureParts: Array<{ expression: string; alias: string; defaultFilter?: string; id: string }> = [];
   for (const measure of selected) {
     const expression = measure.measureExpression;
     if (!expression) {
@@ -198,12 +199,33 @@ export function compileSemanticQuery(query: SemanticQuery, definitions: Semantic
       }
       return measure.sqlTemplate;
     }
-    const condition = measure.defaultFilter ? ` FILTER (WHERE ${measure.defaultFilter})` : "";
     const alias = aliasFor(measure.id.replace(/[^a-zA-Z0-9_]+/g, "_"));
     measureAliases.set(measure.id, alias);
-    projections.push(`${expression}${condition} AS "${alias}"`);
+    measureParts.push({ expression, alias, defaultFilter: measure.defaultFilter, id: measure.id });
+  }
+  // SQL allows FILTER (WHERE ...) only directly after an aggregate call, so a
+  // measureExpression like ROUND(AVG(x), 2) or SUM(x) / 100.0 cannot carry one.
+  // For those the filter has to move into WHERE, which is only equivalent when
+  // every selected measure shares it — otherwise we would silently widen or
+  // narrow the others. Emitting the invalid form instead produced SQL that failed
+  // at the database and surfaced as an empty result with no error.
+  const offender = measureParts.find(
+    (part) => part.defaultFilter && !isBareAggregateCall(part.expression),
+  );
+  const needsHoist = offender !== undefined;
+  if (needsHoist && new Set(measureParts.map((part) => part.defaultFilter ?? "")).size > 1) {
+    throw new SemanticError(
+      `Measure "${offender.id}" has measureExpression "${offender.expression}", which is not a plain aggregate call, so its filter must be applied in WHERE — but the selected measures do not share the same defaultFilter. Query these measures separately, or change measureExpression to a plain aggregate such as AVG(x) so the filter can be applied per measure.`,
+    );
+  }
+  const hoistedFilter = needsHoist ? offender.defaultFilter : undefined;
+  for (const part of measureParts) {
+    const condition =
+      part.defaultFilter && !needsHoist ? ` FILTER (WHERE ${part.defaultFilter})` : "";
+    projections.push(`${part.expression}${condition} AS "${part.alias}"`);
   }
   const filters = (query.filters ?? []).map((filter) => compileFilter(filter, selected));
+  if (hoistedFilter) filters.unshift(`(${hoistedFilter})`);
   const sql = [`SELECT ${projections.join(", ")}`, `FROM ${table}`];
   if (filters.length) sql.push(`WHERE ${filters.join(" AND ")}`);
   if (dimensionOwners.length) sql.push(`GROUP BY ${dimensionOwners.map((item) => item.expression).join(", ")}`);
@@ -259,6 +281,37 @@ export function rankSemanticDefinitions(
     .sort((a, b) => b.score - a.score || a.definition.id.localeCompare(b.definition.id))
     .slice(0, limit)
     .map((hit) => ({ definition: hit.definition, score: hit.score }));
+}
+
+const AGGREGATE_NAMES = new Set([
+  "count", "sum", "avg", "min", "max", "bool_and", "bool_or", "every",
+  "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp",
+  "array_agg", "string_agg", "jsonb_agg", "json_agg", "bit_and", "bit_or",
+]);
+
+/**
+ * True when the expression is a single aggregate call and nothing else, e.g.
+ * `AVG(rating)` or `COUNT(*)`. Only then may a FILTER (WHERE ...) clause follow
+ * it. `ROUND(AVG(x), 2)` and `SUM(x) / 100.0` are not, because the aggregate is
+ * not the outermost node.
+ */
+export function isBareAggregateCall(expression: string): boolean {
+  const trimmed = expression.trim();
+  const match = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/.exec(trimmed);
+  if (!match) return false;
+  if (!AGGREGATE_NAMES.has((match[1] ?? "").toLowerCase())) return false;
+  // The call's closing paren must be the final character, otherwise something
+  // wraps or follows the aggregate.
+  let depth = 0;
+  for (let i = trimmed.indexOf("("); i < trimmed.length; i += 1) {
+    const ch = trimmed[i];
+    if (ch === "(") depth += 1;
+    else if (ch === ")") {
+      depth -= 1;
+      if (depth === 0) return i === trimmed.length - 1;
+    }
+  }
+  return false;
 }
 
 function normalizePhrase(value: string): string {
