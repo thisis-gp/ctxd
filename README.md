@@ -30,6 +30,15 @@ npm test
 npx ctxd init
 ```
 
+Requires **Node 20 or newer**. `better-sqlite3` is a native module, so if you
+switch Node versions after installing you will see
+`NODE_MODULE_VERSION ... does not match`. Rebuild it rather than reinstalling
+everything:
+
+```bash
+npm rebuild better-sqlite3
+```
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev workflow. Report security
 issues privately — see [SECURITY.md](SECURITY.md).
 

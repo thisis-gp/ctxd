@@ -13,17 +13,39 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
+      # The public repo has no Metabase credentials, and it should not. Without
+      # this guard the scheduled run fails every night and the repo shows a red X
+      # to everyone who visits it.
+      - name: Check whether Metabase is configured
+        id: cfg
+        env:
+          METABASE_URL: ${{ secrets.METABASE_URL }}
+          METABASE_API_KEY: ${{ secrets.METABASE_API_KEY }}
+        run: |
+          if [ -z "$METABASE_URL" ] || [ -z "$METABASE_API_KEY" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::METABASE_URL / METABASE_API_KEY are not set - skipping nightly refresh. Expected for forks and for the public OSS repo."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.cfg.outputs.configured == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.configured == 'true'
         with:
           node-version: "20"
 
-      - run: corepack enable
-      - run: yarn install --frozen-lockfile
-      - run: yarn build
+      - if: steps.cfg.outputs.configured == 'true'
+        run: corepack enable
+      - if: steps.cfg.outputs.configured == 'true'
+        run: yarn install --frozen-lockfile
+      - if: steps.cfg.outputs.configured == 'true'
+        run: yarn build
 
       - name: Refresh snapshot from Metabase
+        if: steps.cfg.outputs.configured == 'true'
         env:
           METABASE_URL: ${{ secrets.METABASE_URL }}
           METABASE_API_KEY: ${{ secrets.METABASE_API_KEY }}
@@ -34,6 +56,7 @@ jobs:
         run: node dist/cli.js refresh --prune-keep 14
 
       - name: Upload current snapshot artifact
+        if: steps.cfg.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ctxd-snapshot-nightly

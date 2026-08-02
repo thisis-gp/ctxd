@@ -323,6 +323,9 @@ export class ContextService {
             ...(e.table ? { table: e.table } : {}),
             ...(e.dataType ? { type: e.dataType } : {}),
             ...(e.semanticType ? { semanticType: e.semanticType } : {}),
+            // Tables already report this; without it here an agent cannot tell a
+            // masked column from an ordinary one and may plan a query around PII.
+            ...(e.denylisted ? { denylisted: true } : {}),
           }))
         : [],
       assets: wantAssets

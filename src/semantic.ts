@@ -53,7 +53,10 @@ export const zSemanticQuery = z.object({
   })).optional(),
   orderBy: z.array(z.object({ field: z.string(), direction: z.enum(["asc", "desc"]).optional() })).optional(),
   limit: z.number().int().min(1).max(1000).optional(),
-});
+  // Strict: an agent that passes an unknown key (e.g. `execute`, which is a CLI
+  // flag, not part of the query) must get an error rather than silently
+  // receiving a different query than the one it thinks it asked for.
+}).strict();
 
 export async function loadSemanticDefinitions(file: string): Promise<SemanticDefinition[]> {
   let raw: string;

@@ -7,8 +7,13 @@
 
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
+
+/** A lock older than this is assumed abandoned by a crashed process. */
+const STALE_LOCK_MS = 15_000;
+/** Don't rewrite lastUsedAt more often than this per token. */
+const TOUCH_INTERVAL_MS = 60_000;
 
 export interface TokenRecord {
   id: string;
@@ -102,6 +107,12 @@ export class TokenStore {
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
         if (code !== "EEXIST") throw err;
+        if (await this.lockIsStale()) {
+          // A previous process died holding the lock. Without this, every later
+          // create/revoke fails forever until someone deletes the directory by hand.
+          await rm(this.lockPath, { recursive: true, force: true }).catch(() => undefined);
+          continue;
+        }
         if (Date.now() - started > 5000) {
           throw new TokenStoreError(`Timed out waiting for token store lock at ${this.lockPath}`);
         }
@@ -150,19 +161,65 @@ export class TokenStore {
     });
   }
 
-  /** Verify a raw bearer token; updates lastUsedAt on success. */
+  private async lockIsStale(): Promise<boolean> {
+    try {
+      const info = await stat(this.lockPath);
+      return Date.now() - info.mtimeMs > STALE_LOCK_MS;
+    } catch {
+      return false; // vanished underneath us; the next mkdir attempt decides
+    }
+  }
+
+  /**
+   * Verify a raw bearer token.
+   *
+   * Deliberately lock-free: this is the hot path for every authenticated MCP
+   * request, and taking an exclusive filesystem lock here serialized all auth
+   * behind one writer. Reads are safe because `save()` swaps the file in
+   * atomically via rename, so a reader sees either the old or the new file.
+   */
   async verify(rawToken: string): Promise<TokenRecord | undefined> {
     if (!rawToken) return undefined;
-    return this.withLock(async () => {
-      const want = hashToken(rawToken);
-      const data = await this.load();
-      const row = data.tokens.find((t) => !t.revokedAt && safeEqualHex(t.tokenHash, want));
-      if (!row) return undefined;
-      row.lastUsedAt = new Date().toISOString();
-      await this.save(data);
-      return row;
-    });
+    const want = hashToken(rawToken);
+    const data = await this.load();
+    const row = data.tokens.find((t) => !t.revokedAt && safeEqualHex(t.tokenHash, want));
+    if (!row) return undefined;
+    const due = this.touchIsDue(row);
+    // Callers see an accurate lastUsedAt immediately; persisting it is coalesced.
+    row.lastUsedAt = new Date().toISOString();
+    if (due) void this.touch(row.id);
+    return row;
   }
+
+  private touchIsDue(row: TokenRecord): boolean {
+    if (!row.lastUsedAt) return true;
+    const last = Date.parse(row.lastUsedAt);
+    return Number.isNaN(last) || Date.now() - last > TOUCH_INTERVAL_MS;
+  }
+
+  /**
+   * Stamp lastUsedAt. Telemetry only, so it is coalesced by TOUCH_INTERVAL_MS,
+   * runs off the request path, and can never fail an otherwise valid auth.
+   */
+  private async touch(id: string): Promise<void> {
+    if (this.pendingTouches.has(id)) return;
+    this.pendingTouches.add(id);
+    try {
+      await this.withLock(async () => {
+        const data = await this.load();
+        const row = data.tokens.find((t) => t.id === id);
+        if (!row || !this.touchIsDue(row)) return;
+        row.lastUsedAt = new Date().toISOString();
+        await this.save(data);
+      });
+    } catch {
+      // Never surface a telemetry write failure to the caller.
+    } finally {
+      this.pendingTouches.delete(id);
+    }
+  }
+
+  private readonly pendingTouches = new Set<string>();
 }
 
 export function defaultTokenStorePath(dataDir = "./data"): string {
