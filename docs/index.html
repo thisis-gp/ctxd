@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ctxd — stop AI agents hallucinating against your database</title>
+    <meta name="description" content="ctxd is a release-aware context layer and MCP runtime that gives AI agents reviewed metric definitions, approved join paths, read-only enforcement and PII masking instead of raw schema." />
+    <meta property="og:title" content="ctxd — reliable data context for AI agents" />
+    <meta property="og:description" content="Agents that write SQL from raw schema guess which table is canonical. ctxd gives them a reviewed, versioned contract instead." />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfaf9;
+        --panel: #ffffff;
+        --ink: #1a1d21;
+        --muted: #5c646d;
+        --line: #e4e2df;
+        --accent: #c1552d;
+        --good: #2f7d5d;
+        --bad: #b4462f;
+        --code-bg: #f4f2f0;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14161a; --panel: #1b1e23; --ink: #e9e7e4; --muted: #9aa1a9;
+          --line: #2b2f36; --accent: #e08256; --good: #6cc79a; --bad: #e0806a;
+          --code-bg: #23262c;
+        }
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #14161a; --panel: #1b1e23; --ink: #e9e7e4; --muted: #9aa1a9;
+        --line: #2b2f36; --accent: #e08256; --good: #6cc79a; --bad: #e0806a;
+        --code-bg: #23262c;
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #fbfaf9; --panel: #ffffff; --ink: #1a1d21; --muted: #5c646d;
+        --line: #e4e2df; --accent: #c1552d; --good: #2f7d5d; --bad: #b4462f;
+        --code-bg: #f4f2f0;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--ink);
+        font: 16px/1.65 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+      header { padding: 72px 0 8px; }
+      .name {
+        font: 600 15px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+      }
+      h1 {
+        margin: 18px 0 0; font-size: clamp(30px, 5.2vw, 46px); line-height: 1.12;
+        letter-spacing: -.02em; font-weight: 650;
+      }
+      .lede { margin: 20px 0 0; font-size: 19px; color: var(--muted); max-width: 60ch; }
+      h2 {
+        margin: 64px 0 6px; font-size: 13px; letter-spacing: .12em;
+        text-transform: uppercase; color: var(--muted); font-weight: 600;
+      }
+      h3 { margin: 34px 0 10px; font-size: 20px; font-weight: 620; letter-spacing: -.01em; }
+      p { margin: 12px 0; }
+      a { color: var(--accent); }
+      figure { margin: 18px 0 8px; }
+      figure img {
+        display: block; width: 100%; height: auto; border: 1px solid var(--line);
+        border-radius: 10px; background: #14161a;
+      }
+      figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); }
+      .num { font-weight: 660; font-variant-numeric: tabular-nums; }
+      .num.bad { color: var(--bad); }
+      .num.good { color: var(--good); }
+      pre {
+        background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+        padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+        font: 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+      p code, li code, .card code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+      ul { padding-left: 20px; }
+      li { margin: 8px 0; }
+      .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 16px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+      .card b { display: block; margin-bottom: 4px; font-size: 15px; }
+      .card span { font-size: 14px; color: var(--muted); }
+      .note {
+        border-left: 3px solid var(--line); padding: 2px 0 2px 16px;
+        color: var(--muted); font-size: 14.5px; margin: 16px 0;
+      }
+      .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+      .btn {
+        display: inline-block; padding: 10px 18px; border-radius: 8px; font-size: 15px;
+        font-weight: 550; text-decoration: none; border: 1px solid var(--accent);
+        color: var(--accent);
+      }
+      .btn.solid { background: var(--accent); color: #fff; }
+      footer {
+        margin: 80px 0 60px; padding-top: 22px; border-top: 1px solid var(--line);
+        font-size: 14px; color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="name">ctxd</div>
+        <h1>Stop your AI agent hallucinating against your production database.</h1>
+        <p class="lede">
+          A release-aware context layer and MCP runtime. Agents get reviewed metric
+          definitions, approved join paths, read-only enforcement and PII masking —
+          instead of raw schema and a guess.
+        </p>
+        <div class="cta">
+          <a class="btn solid" href="https://github.com/thisis-gp/ctxd">View on GitHub</a>
+          <a class="btn" href="demo.html">Open the interactive demo</a>
+        </div>
+      </header>
+
+      <h2>The problem</h2>
+      <h3>An agent reading raw schema has to guess</h3>
+      <p>
+        Nothing in a column name says which of three <code>csat</code> tables is
+        canonical, that <code>rating = 0</code> means the survey was never answered,
+        or that <code>*_history</code> holds superseded rows.
+      </p>
+      <figure>
+        <img src="01-without-ctxd.gif" alt="An AI agent inspects the schema, picks a plausible table, and reports the wrong CSAT figure." />
+        <figcaption>
+          Asked for CSAT on settled claims, the agent inspects the schema, finds three
+          plausible tables, picks one, and reports <span class="num bad">2.70 / 5</span>.
+          No error. No warning. It reads exactly like a finished answer.
+        </figcaption>
+      </figure>
+
+      <h2>With ctxd</h2>
+      <h3>The same question, answered from a reviewed definition</h3>
+      <figure>
+        <img src="03-real-claude-session.gif" alt="A real Claude Code session calling ctxd's MCP tools and returning the correct CSAT figure." />
+        <figcaption>
+          Claude finds the governed metric <code>csat.settled_claims</code>, applies the
+          rules it already encodes, and returns <span class="num good">4.67 / 5</span>
+          across 900 answered surveys — citing the snapshot release it read.
+        </figcaption>
+      </figure>
+      <p class="note">
+        A real Claude Code session over ctxd's MCP server. The tool calls, arguments,
+        returned values and final answer are verbatim; the frames are re-typeset for
+        legibility rather than screen-captured. The database is synthetic, and all
+        three recorded takes returned 4.67.
+      </p>
+
+      <h2>Quickstart</h2>
+      <pre><code>npm install ctxd
+npx ctxd init          # scaffold .env
+npx ctxd doctor        # check connectivity and snapshot readiness
+npx ctxd refresh       # index Metabase into a versioned snapshot
+npx ctxd serve --http  # serve MCP to Claude, Codex, or any client</code></pre>
+      <p>
+        Requires Node 20+. Point <code>METABASE_URL</code> and
+        <code>METABASE_API_KEY</code> at your instance; there is no mapping file and no
+        plugin to install.
+      </p>
+
+      <h2>What it enforces</h2>
+      <div class="grid">
+        <div class="card">
+          <b>Read-only by default</b>
+          <span>Agents get context and drafted SQL. Execution is opt-in via
+          <code>CTXD_ALLOW_QUERY</code>.</span>
+        </div>
+        <div class="card">
+          <b>Fails closed</b>
+          <span>Single <code>SELECT</code>/<code>WITH</code> only. Mutations, DDL,
+          stacked statements and <code>SELECT … INTO</code> rejected.</span>
+        </div>
+        <div class="card">
+          <b>PII stays masked</b>
+          <span>Denylisted columns stay indexed but carry no values. Wildcards like
+          <code>*.email</code> cover every table.</span>
+        </div>
+        <div class="card">
+          <b>Versioned snapshots</b>
+          <span>Every answer cites a release and schema fingerprint, so drift is
+          visible instead of silent.</span>
+        </div>
+        <div class="card">
+          <b>Reviewed semantics</b>
+          <span>Metric definitions are data your team approves — not something the
+          model infers per request.</span>
+        </div>
+        <div class="card">
+          <b>Auditable</b>
+          <span>Every executed query is appended to
+          <code>audit/queries.jsonl</code>.</span>
+        </div>
+      </div>
+
+      <h2>What it is not</h2>
+      <p>
+        ctxd does not replace Metabase, dbt, Cube, or your warehouse. It is the
+        contract, compiler, release gate, and evaluation layer between those systems
+        and an agent.
+      </p>
+
+      <footer>
+        MIT licensed ·
+        <a href="https://github.com/thisis-gp/ctxd">github.com/thisis-gp/ctxd</a> ·
+        Report security issues privately via
+        <a href="https://github.com/thisis-gp/ctxd/blob/main/SECURITY.md">SECURITY.md</a>
+      </footer>
+    </div>
+  </body>
+</html>

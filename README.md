@@ -3,13 +3,39 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 
-A vendor-neutral, release-aware context contract and MCP runtime for reliable
-data agents. It gives Claude, Codex, and other clients compact metadata, reviewed
-semantic definitions, approved join paths, and pre-execution validation.
+**Stop your AI agent hallucinating against your production database.**
 
-The project deliberately does not replace Metabase, dbt, Cube, or a warehouse.
-It is the contract, compiler, release gate, and evaluation layer between those
-systems and an agent.
+An agent that writes SQL from raw schema has no way to know which of your three
+`csat` tables is canonical, that `rating = 0` means the survey was never answered,
+or that `*_history` holds superseded rows. So it guesses — and answers
+confidently, with no error and no warning.
+
+ctxd puts a reviewed, release-versioned context layer between the agent and your
+data: compact metadata, approved metric definitions, join paths, read-only
+enforcement, and PII masking.
+
+### The problem
+
+![An agent guessing against raw schema](docs/01-without-ctxd.gif)
+
+Asked for CSAT on settled claims, the agent inspects the schema, finds three
+plausible tables, picks one, and reports **2.70 out of 5**. It looks exactly like
+a finished answer.
+
+### The same question, with ctxd
+
+![A real Claude Code session using ctxd](docs/03-real-claude-session.gif)
+
+Answered from the reviewed metric `csat.settled_claims`: **4.67 out of 5** across
+900 answered surveys, citing the snapshot release it read.
+
+> A real Claude Code session over ctxd's MCP server — the tool calls, arguments,
+> returned values and final answer are verbatim, re-typeset for legibility rather
+> than screen-captured. The database is synthetic; all three takes returned 4.67.
+
+ctxd deliberately does not replace Metabase, dbt, Cube, or a warehouse. It is the
+contract, compiler, release gate, and evaluation layer between those systems and
+an agent.
 
 ## Install
 
@@ -55,6 +81,25 @@ compiler for agents; Metabase remains the query surface.
 It talks to Metabase **via the Metabase API for metadata ingest** (and optionally
 for tech-bot query execution). No direct database credentials. Nightly `refresh`
 uses a server-side API key; end users never see it.
+
+## Safety
+
+The differentiator is not that an agent can reach your data — it's what it cannot do.
+
+- **Read-only by default.** Out of the box ctxd hands back context and *drafted*
+  SQL; nothing executes. Users run queries in Metabase under their own access.
+  `CTXD_ALLOW_QUERY=true` is opt-in, for trusted bots only.
+- **Fails closed.** With execution enabled, SQL must start with `SELECT`/`WITH`,
+  parse as a single statement, and reference only tables and columns present in
+  the active snapshot. Mutations, DDL, stacked statements and `SELECT ... INTO`
+  are rejected.
+- **PII stays masked.** Denylisted tables and columns remain indexed, so an agent
+  knows they exist, but carry no descriptions or sample values and cannot appear
+  in validated SQL. Wildcards like `*.email` cover every table at once.
+- **Every execution is auditable**, appended to `audit/queries.jsonl`.
+- **Snapshots hold metadata and query definitions only** — never production rows.
+
+Full details in [Safety reference](#safety-reference) below.
 
 ## Who configures what (plug-and-play)
 
@@ -349,7 +394,7 @@ through standard Postgres environment variables or set `CTXD_SEMANTIC_CHECK_PSQL
 yarn test:semantic:db
 ```
 
-## Safety
+## Safety reference
 
 - API keys come only from env / secret manager, are never logged, and are never
   written into a snapshot.
