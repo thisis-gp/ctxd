@@ -345,8 +345,8 @@ node dist/cli.js release-gate \
   --observations examples/benchmark-observations.json
 ```
 
-The example GitHub Actions workflow in `.github/workflows/release.yml` runs this
-after snapshot build and before publish/promote.
+Run this after a snapshot build and before publish/promote, so a release cannot be
+promoted on a snapshot that fails the gate.
 
 ### Demo
 
