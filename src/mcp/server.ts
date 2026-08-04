@@ -13,6 +13,7 @@
  * shallow, and validate arguments at runtime with Zod.
  */
 
+import { VERSION } from "../version.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -311,7 +312,7 @@ export function listMcpTools(allowQueryExecution: boolean): ToolDef[] {
 export function buildMcpServer(service: ContextService): Server {
   const tools = listMcpTools(service.allowsQueryExecution);
   const server = new Server(
-    { name: "ctxd", version: "0.1.0" },
+    { name: "ctxd", version: VERSION },
     { capabilities: { tools: {} } },
   );
 

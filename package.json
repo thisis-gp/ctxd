@@ -1,6 +1,6 @@
 {
-  "name": "ctxd",
-  "version": "0.1.0",
+  "name": "@dagurupriyan/ctxd",
+  "version": "0.1.0-beta.0",
   "description": "Vendor-neutral context contract, semantic compiler, release validation, and MCP runtime for reliable data agents.",
   "license": "MIT",
   "type": "module",
@@ -38,9 +38,6 @@
     "SECURITY.md",
     "CHANGELOG.md"
   ],
-  "engines": {
-    "node": ">=20"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thisis-gp/ctxd.git"

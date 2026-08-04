@@ -14,6 +14,7 @@
  *   serve                      start the MCP stdio server
  */
 
+import { VERSION } from "./version.js";
 import { Command } from "commander";
 import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -132,7 +133,7 @@ const program = new Command();
 program
   .name("ctxd")
   .description("Release-aware MCP context layer over a Metabase-backed database.")
-  .version("0.1.0");
+  .version(VERSION);
 
 program
   .command("init")

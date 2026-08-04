@@ -42,9 +42,13 @@ an agent.
 **From npm** (CLI + library; requires a C++ toolchain for `better-sqlite3`):
 
 ```bash
-npm install ctxd
-npx ctxd init
+npm install -g @dagurupriyan/ctxd@next
+ctxd init
 ```
+
+The package lives under the `@dagurupriyan` scope; the command it installs is plain
+`ctxd`. It is currently a prerelease on the `next` tag — drop `@next` once a
+`latest` release is published.
 
 **From source** (recommended for development and contributions):
 
@@ -114,10 +118,10 @@ Full details in [Safety reference](#safety-reference) below.
 
 ```bash
 # On the server (tech once)
-npx ctxd init
+ctxd init
 # edit .env: METABASE_URL, METABASE_API_KEY, CTXD_ADMIN_TOKEN, CTXD_DOMAIN, ACME_EMAIL
 
-npx ctxd refresh --prune-keep 14   # must run on the SAME host/volume as serve
+ctxd refresh --prune-keep 14   # must run on the SAME host/volume as serve
 docker compose up -d --build       # Caddy HTTPS → ctxd
 ```
 
@@ -152,7 +156,7 @@ though the dashboard also requires `CTXD_ADMIN_TOKEN`.
 ### Local developer (stdio)
 
 ```bash
-npx ctxd serve
+ctxd serve
 ```
 
 Register with a local command entry as in `examples/mcp-config.json` (`ctxd-local`).
@@ -273,8 +277,8 @@ connectors do not need a separate agent-facing contract.
 ## Serving to an agent
 
 ```bash
-npx ctxd serve                 # local MCP stdio (developer laptop)
-npx ctxd serve --http          # shared org MCP at http://HOST:8787/mcp
+ctxd serve                 # local MCP stdio (developer laptop)
+ctxd serve --http          # shared org MCP at http://HOST:8787/mcp
 ```
 
 Register it with Claude Code / Codex (see `examples/mcp-config.json`).
